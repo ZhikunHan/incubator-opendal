@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/docs/rfcs/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../opendal/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/docs/rfcs/mod.rs`."><title>mod.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-4e54bb2b497cc83f.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (f688dd684 2024-01-04)" data-channel="nightly" data-search-js="search-c17e98913a53b3b7.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0b2e2def73e61cbe.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../opendal/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -169,175 +171,281 @@
 <a href="#169" id="169">169</a>
 <a href="#170" id="170">170</a>
 <a href="#171" id="171">171</a>
+<a href="#172" id="172">172</a>
+<a href="#173" id="173">173</a>
+<a href="#174" id="174">174</a>
+<a href="#175" id="175">175</a>
+<a href="#176" id="176">176</a>
+<a href="#177" id="177">177</a>
+<a href="#178" id="178">178</a>
+<a href="#179" id="179">179</a>
+<a href="#180" id="180">180</a>
+<a href="#181" id="181">181</a>
+<a href="#182" id="182">182</a>
+<a href="#183" id="183">183</a>
+<a href="#184" id="184">184</a>
+<a href="#185" id="185">185</a>
+<a href="#186" id="186">186</a>
+<a href="#187" id="187">187</a>
+<a href="#188" id="188">188</a>
+<a href="#189" id="189">189</a>
+<a href="#190" id="190">190</a>
+<a href="#191" id="191">191</a>
+<a href="#192" id="192">192</a>
+<a href="#193" id="193">193</a>
+<a href="#194" id="194">194</a>
+<a href="#195" id="195">195</a>
+<a href="#196" id="196">196</a>
+<a href="#197" id="197">197</a>
+<a href="#198" id="198">198</a>
+<a href="#199" id="199">199</a>
+<a href="#200" id="200">200</a>
+<a href="#201" id="201">201</a>
+<a href="#202" id="202">202</a>
+<a href="#203" id="203">203</a>
+<a href="#204" id="204">204</a>
+<a href="#205" id="205">205</a>
+<a href="#206" id="206">206</a>
+<a href="#207" id="207">207</a>
+<a href="#208" id="208">208</a>
+<a href="#209" id="209">209</a>
+<a href="#210" id="210">210</a>
+<a href="#211" id="211">211</a>
+<a href="#212" id="212">212</a>
+<a href="#213" id="213">213</a>
+<a href="#214" id="214">214</a>
+<a href="#215" id="215">215</a>
+<a href="#216" id="216">216</a>
+<a href="#217" id="217">217</a>
+<a href="#218" id="218">218</a>
+<a href="#219" id="219">219</a>
+<a href="#220" id="220">220</a>
+<a href="#221" id="221">221</a>
+<a href="#222" id="222">222</a>
+<a href="#223" id="223">223</a>
+<a href="#224" id="224">224</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
 // to you under the Apache License, Version 2.0 (the
-// &quot;License&quot;); you may not use this file except in compliance
+// "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
 //
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
-// &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
 
-</span><span class="doccomment">//! RFCs power OpenDAL&#39;s development.
-//!
-//! To add new features and big refactors:
-//!
-//! - Start a new RFCs with the template [`rfc_0000_example`].
-//! - Submit PR and assign the RFC number with the PR number.
-//! - Request reviews from OpenDAL maintainers.
-//! - Create a tracking issue and update links in RFC after approval.
-//!
-//! Some useful tips:
-//!
-//! - Start a pre-propose in [discussion](https://github.com/apache/incubator-opendal/discussions/categories/ideas) to communicate quickly.
-//! - The proposer of RFC may not be the same person as the implementor. Try to include enough information in RFC itself.
+</span><span class="attr">#![doc = <span class="macro">include_str!</span>(<span class="string">"README.md"</span>)]
 
-</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0000_example.md&quot;</span>)]
+</span><span class="doccomment">/// RFC example
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0000_example.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0000_example {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0041_object_native_api.md&quot;</span>)]
+<span class="doccomment">/// Object native API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0041_object_native_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0041_object_native_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0044_error_handle.md&quot;</span>)]
+<span class="doccomment">/// Error handle
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0044_error_handle.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0044_error_handle {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0057_auto_region.md&quot;</span>)]
+<span class="doccomment">/// Auto region
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0057_auto_region.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0057_auto_region {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0069_object_stream.md&quot;</span>)]
+<span class="doccomment">/// Object stream
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0069_object_stream.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0069_object_stream {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0090_limited_reader.md&quot;</span>)]
+<span class="doccomment">/// Limited reader
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0090_limited_reader.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0090_limited_reader {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0112_path_normalization.md&quot;</span>)]
+<span class="doccomment">/// Path normalization
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0112_path_normalization.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0112_path_normalization {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0191_async_streaming_io.md&quot;</span>)]
+<span class="doccomment">/// Async streaming IO
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0191_async_streaming_io.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0191_async_streaming_io {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0203_remove_credential.md&quot;</span>)]
+<span class="doccomment">/// Remove credential
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0203_remove_credential.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0203_remove_credential {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0221_create_dir.md&quot;</span>)]
+<span class="doccomment">/// Create dir
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0221_create_dir.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0221_create_dir {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0247_retryable_error.md&quot;</span>)]
+<span class="doccomment">/// Retryable error
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0247_retryable_error.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0247_retryable_error {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0293_object_id.md&quot;</span>)]
+<span class="doccomment">/// Object ID
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0293_object_id.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0293_object_id {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0337_dir_entry.md&quot;</span>)]
+<span class="doccomment">/// Dir entry
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0337_dir_entry.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0337_dir_entry {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0409_accessor_capabilities.md&quot;</span>)]
+<span class="doccomment">/// Accessor capabilities
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0409_accessor_capabilities.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0409_accessor_capabilities {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0413_presign.md&quot;</span>)]
+<span class="doccomment">/// Presign
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0413_presign.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0413_presign {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0423_command_line_interface.md&quot;</span>)]
+<span class="doccomment">/// Command line interface
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0423_command_line_interface.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0423_command_line_interface {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0429_init_from_iter.md&quot;</span>)]
+<span class="doccomment">/// Init from iter
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0429_init_from_iter.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0429_init_from_iter {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0438_multipart.md&quot;</span>)]
+<span class="doccomment">/// Multipart
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0438_multipart.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0438_multipart {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0443_gateway.md&quot;</span>)]
+<span class="doccomment">/// Gateway
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0443_gateway.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0443_gateway {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0501_new_builder.md&quot;</span>)]
+<span class="doccomment">/// New builder
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0501_new_builder.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0501_new_builder {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0554_write_refactor.md&quot;</span>)]
+<span class="doccomment">/// Write refactor
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0554_write_refactor.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0554_write_refactor {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0561_list_metadata_reuse.md&quot;</span>)]
+<span class="doccomment">/// List metadata reuse
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0561_list_metadata_reuse.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0561_list_metadata_reuse {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0599_blocking_api.md&quot;</span>)]
+<span class="doccomment">/// Blocking API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0599_blocking_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0599_blocking_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0623_redis_service.md&quot;</span>)]
+<span class="doccomment">/// Redis service
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0623_redis_service.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0623_redis_service {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0627_split_capabilities.md&quot;</span>)]
+<span class="doccomment">/// Split capabilities
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0627_split_capabilities.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0627_split_capabilities {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0661_path_in_accessor.md&quot;</span>)]
+<span class="doccomment">/// Path in accessor
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0661_path_in_accessor.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0661_path_in_accessor {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0793_generic_kv_services.md&quot;</span>)]
+<span class="doccomment">/// Generic KV services
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0793_generic_kv_services.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0793_generic_kv_services {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0926_object_reader.md&quot;</span>)]
+<span class="doccomment">/// Object reader
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0926_object_reader.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0926_object_reader {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;0977_refactor_error.md&quot;</span>)]
+<span class="doccomment">/// Refactor error
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"0977_refactor_error.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_0977_refactor_error {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1085_object_handler.md&quot;</span>)]
+<span class="doccomment">/// Object handler
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1085_object_handler.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1085_object_handler {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1391_object_metadataer.md&quot;</span>)]
+<span class="doccomment">/// Object metadataer
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1391_object_metadataer.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1391_object_metadataer {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1398_query_based_metadata.md&quot;</span>)]
+<span class="doccomment">/// Query based metadata
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1398_query_based_metadata.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1398_query_based_metadata {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1420_object_writer.md&quot;</span>)]
+<span class="doccomment">/// Object writer
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1420_object_writer.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1420_object_writer {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1477_remove_object_concept.md&quot;</span>)]
+<span class="doccomment">/// Remove object concept
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1477_remove_object_concept.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1477_remove_object_concept {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;1735_operation_extension.md&quot;</span>)]
+<span class="doccomment">/// Operation extension
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"1735_operation_extension.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_1735_operation_extension {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2083_writer_sink_api.md&quot;</span>)]
+<span class="doccomment">/// Writer sink API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2083_writer_sink_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2083_writer_sink_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2133_append_api.md&quot;</span>)]
+<span class="doccomment">/// Append API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2133_append_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2133_append_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2299_chain_based_operator_api.md&quot;</span>)]
+<span class="doccomment">/// Chain based operator API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2299_chain_based_operator_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2299_chain_based_operator_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2602_object_versioning.md&quot;</span>)]
+<span class="doccomment">/// Object versioning
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2602_object_versioning.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2602_object_versioning {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2758_merge_append_into_write.md&quot;</span>)]
+<span class="doccomment">/// Merge append into write
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2758_merge_append_into_write.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2758_merge_append_into_write {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2774_lister_api.md&quot;</span>)]
+<span class="doccomment">/// Lister API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2774_lister_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2774_lister_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2779_list_with_metakey.md&quot;</span>)]
+<span class="doccomment">/// List with metakey
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2779_list_with_metakey.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2779_list_with_metakey {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;2852_native_capability.md&quot;</span>)]
+<span class="doccomment">/// Native capability
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"2852_native_capability.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_2852_native_capability {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;3017_remove_write_copy_from.md&quot;</span>)]
+<span class="doccomment">/// Remove write copy from
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3017_remove_write_copy_from.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_3017_remove_write_copy_from {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;3197_config.md&quot;</span>)]
+<span class="doccomment">/// Config
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3197_config.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_3197_config {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;3232_align_list_api.md&quot;</span>)]
+<span class="doccomment">/// Align list API
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3232_align_list_api.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_3232_align_list_api {}
 
-<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">&quot;3243_list_prefix.md&quot;</span>)]
+<span class="doccomment">/// List prefix
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3243_list_prefix.md"</span>)]
 </span><span class="kw">pub mod </span>rfc_3243_list_prefix {}
+
+<span class="doccomment">/// Lazy reader
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3356_lazy_reader.md"</span>)]
+</span><span class="kw">pub mod </span>rfc_3356_lazy_reader {}
+
+<span class="doccomment">/// List recursive
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3526_list_recursive.md"</span>)]
+</span><span class="kw">pub mod </span>rfc_3526_list_recursive {}
+
+<span class="doccomment">/// Concurrent stat in list
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3574_concurrent_stat_in_list.md"</span>)]
+</span><span class="kw">pub mod </span>rfc_3574_concurrent_stat_in_list {}
+
+<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3734_buffered_reader.md"</span>)]
+</span><span class="kw">pub mod </span>rfc_3734_buffered_reader {}
+
+<span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"3898_concurrent_writer.md"</span>)]
+</span><span class="kw">pub mod </span>rfc_3898_concurrent_writer {}
 </code></pre></div></section></main></body></html>

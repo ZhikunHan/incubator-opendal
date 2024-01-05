@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/raw/ops.rs`."><title>ops.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../opendal/index.html"><img class="rust-logo" src="../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/raw/ops.rs`."><title>ops.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../static.files/rustdoc-4e54bb2b497cc83f.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (f688dd684 2024-01-04)" data-channel="nightly" data-search-js="search-c17e98913a53b3b7.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-0b2e2def73e61cbe.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../opendal/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -514,19 +516,129 @@
 <a href="#514" id="514">514</a>
 <a href="#515" id="515">515</a>
 <a href="#516" id="516">516</a>
+<a href="#517" id="517">517</a>
+<a href="#518" id="518">518</a>
+<a href="#519" id="519">519</a>
+<a href="#520" id="520">520</a>
+<a href="#521" id="521">521</a>
+<a href="#522" id="522">522</a>
+<a href="#523" id="523">523</a>
+<a href="#524" id="524">524</a>
+<a href="#525" id="525">525</a>
+<a href="#526" id="526">526</a>
+<a href="#527" id="527">527</a>
+<a href="#528" id="528">528</a>
+<a href="#529" id="529">529</a>
+<a href="#530" id="530">530</a>
+<a href="#531" id="531">531</a>
+<a href="#532" id="532">532</a>
+<a href="#533" id="533">533</a>
+<a href="#534" id="534">534</a>
+<a href="#535" id="535">535</a>
+<a href="#536" id="536">536</a>
+<a href="#537" id="537">537</a>
+<a href="#538" id="538">538</a>
+<a href="#539" id="539">539</a>
+<a href="#540" id="540">540</a>
+<a href="#541" id="541">541</a>
+<a href="#542" id="542">542</a>
+<a href="#543" id="543">543</a>
+<a href="#544" id="544">544</a>
+<a href="#545" id="545">545</a>
+<a href="#546" id="546">546</a>
+<a href="#547" id="547">547</a>
+<a href="#548" id="548">548</a>
+<a href="#549" id="549">549</a>
+<a href="#550" id="550">550</a>
+<a href="#551" id="551">551</a>
+<a href="#552" id="552">552</a>
+<a href="#553" id="553">553</a>
+<a href="#554" id="554">554</a>
+<a href="#555" id="555">555</a>
+<a href="#556" id="556">556</a>
+<a href="#557" id="557">557</a>
+<a href="#558" id="558">558</a>
+<a href="#559" id="559">559</a>
+<a href="#560" id="560">560</a>
+<a href="#561" id="561">561</a>
+<a href="#562" id="562">562</a>
+<a href="#563" id="563">563</a>
+<a href="#564" id="564">564</a>
+<a href="#565" id="565">565</a>
+<a href="#566" id="566">566</a>
+<a href="#567" id="567">567</a>
+<a href="#568" id="568">568</a>
+<a href="#569" id="569">569</a>
+<a href="#570" id="570">570</a>
+<a href="#571" id="571">571</a>
+<a href="#572" id="572">572</a>
+<a href="#573" id="573">573</a>
+<a href="#574" id="574">574</a>
+<a href="#575" id="575">575</a>
+<a href="#576" id="576">576</a>
+<a href="#577" id="577">577</a>
+<a href="#578" id="578">578</a>
+<a href="#579" id="579">579</a>
+<a href="#580" id="580">580</a>
+<a href="#581" id="581">581</a>
+<a href="#582" id="582">582</a>
+<a href="#583" id="583">583</a>
+<a href="#584" id="584">584</a>
+<a href="#585" id="585">585</a>
+<a href="#586" id="586">586</a>
+<a href="#587" id="587">587</a>
+<a href="#588" id="588">588</a>
+<a href="#589" id="589">589</a>
+<a href="#590" id="590">590</a>
+<a href="#591" id="591">591</a>
+<a href="#592" id="592">592</a>
+<a href="#593" id="593">593</a>
+<a href="#594" id="594">594</a>
+<a href="#595" id="595">595</a>
+<a href="#596" id="596">596</a>
+<a href="#597" id="597">597</a>
+<a href="#598" id="598">598</a>
+<a href="#599" id="599">599</a>
+<a href="#600" id="600">600</a>
+<a href="#601" id="601">601</a>
+<a href="#602" id="602">602</a>
+<a href="#603" id="603">603</a>
+<a href="#604" id="604">604</a>
+<a href="#605" id="605">605</a>
+<a href="#606" id="606">606</a>
+<a href="#607" id="607">607</a>
+<a href="#608" id="608">608</a>
+<a href="#609" id="609">609</a>
+<a href="#610" id="610">610</a>
+<a href="#611" id="611">611</a>
+<a href="#612" id="612">612</a>
+<a href="#613" id="613">613</a>
+<a href="#614" id="614">614</a>
+<a href="#615" id="615">615</a>
+<a href="#616" id="616">616</a>
+<a href="#617" id="617">617</a>
+<a href="#618" id="618">618</a>
+<a href="#619" id="619">619</a>
+<a href="#620" id="620">620</a>
+<a href="#621" id="621">621</a>
+<a href="#622" id="622">622</a>
+<a href="#623" id="623">623</a>
+<a href="#624" id="624">624</a>
+<a href="#625" id="625">625</a>
+<a href="#626" id="626">626</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
 // to you under the Apache License, Version 2.0 (the
-// &quot;License&quot;); you may not use this file except in compliance
+// "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
 //
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
-// &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
@@ -587,17 +699,34 @@
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>OpList {
     <span class="doccomment">/// The limit passed to underlying service to specify the max results
-    /// that could return.
+    /// that could return per-request.
+    ///
+    /// Users could use this to control the memory usage of list operation.
     </span>limit: <span class="prelude-ty">Option</span>&lt;usize&gt;,
-
     <span class="doccomment">/// The start_after passes to underlying service to specify the specified key
     /// to start listing from.
     </span>start_after: <span class="prelude-ty">Option</span>&lt;String&gt;,
-
-    <span class="doccomment">/// The delimiter used to for the list operation. Default to be `/`
-    </span>delimiter: String,
-
-    metakey: FlagSet&lt;Metakey&gt;,
+    <span class="doccomment">/// The recursive is used to control whether the list operation is recursive.
+    ///
+    /// - If `false`, list operation will only list the entries under the given path.
+    /// - If `true`, list operation will list all entries that starts with given path.
+    ///
+    /// Default to `false`.
+    </span>recursive: bool,
+    <span class="doccomment">/// Metakey is used to control which meta should be returned.
+    ///
+    /// Lister will make sure the result for specified meta is **known**:
+    ///
+    /// - `Some(v)` means exist.
+    /// - `None` means services doesn't have this meta.
+    </span>metakey: FlagSet&lt;Metakey&gt;,
+    <span class="doccomment">/// The concurrent of stat operations inside list operation.
+    /// Users could use this to control the number of concurrent stat operation when metadata is unknown.
+    ///
+    /// - If this is set to &lt;= 1, the list operation will be sequential.
+    /// - If this is set to &gt; 1, the list operation will be concurrent,
+    ///   and the maximum number of concurrent operations will be determined by this value.
+    </span>concurrent: usize,
 }
 
 <span class="kw">impl </span>Default <span class="kw">for </span>OpList {
@@ -605,9 +734,10 @@
         OpList {
             limit: <span class="prelude-val">None</span>,
             start_after: <span class="prelude-val">None</span>,
-            delimiter: <span class="string">&quot;/&quot;</span>.to_string(),
-            <span class="comment">// By default, we want to know what&#39;s the mode of this entry.
+            recursive: <span class="bool-val">false</span>,
+            <span class="comment">// By default, we want to know what's the mode of this entry.
             </span>metakey: Metakey::Mode.into(),
+            concurrent: <span class="number">1</span>,
         }
     }
 }
@@ -640,15 +770,20 @@
         <span class="self">self</span>.start_after.as_deref()
     }
 
-    <span class="doccomment">/// Change the delimiter. The default delimiter is &quot;/&quot;
-    </span><span class="kw">pub fn </span>with_delimiter(<span class="kw-2">mut </span><span class="self">self</span>, delimiter: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
-        <span class="self">self</span>.delimiter = delimiter.to_string();
+    <span class="doccomment">/// The recursive is used to control whether the list operation is recursive.
+    ///
+    /// - If `false`, list operation will only list the entries under the given path.
+    /// - If `true`, list operation will list all entries that starts with given path.
+    ///
+    /// Default to `false`.
+    </span><span class="kw">pub fn </span>with_recursive(<span class="kw-2">mut </span><span class="self">self</span>, recursive: bool) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.recursive = recursive;
         <span class="self">self
     </span>}
 
-    <span class="doccomment">/// Get the current delimiter.
-    </span><span class="kw">pub fn </span>delimiter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>str {
-        <span class="kw-2">&amp;</span><span class="self">self</span>.delimiter
+    <span class="doccomment">/// Get the current recursive.
+    </span><span class="kw">pub fn </span>recursive(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+        <span class="self">self</span>.recursive
     }
 
     <span class="doccomment">/// Change the metakey of this list operation.
@@ -662,6 +797,19 @@
     <span class="doccomment">/// Get the current metakey.
     </span><span class="kw">pub fn </span>metakey(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; FlagSet&lt;Metakey&gt; {
         <span class="self">self</span>.metakey
+    }
+
+    <span class="doccomment">/// Change the concurrent of this list operation.
+    ///
+    /// The default concurrent is 1.
+    </span><span class="kw">pub fn </span>with_concurrent(<span class="kw-2">mut </span><span class="self">self</span>, concurrent: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.concurrent = concurrent;
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Get the concurrent of list operation.
+    </span><span class="kw">pub fn </span>concurrent(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; usize {
+        <span class="self">self</span>.concurrent
     }
 }
 
@@ -692,6 +840,11 @@
     <span class="doccomment">/// Get expire from op.
     </span><span class="kw">pub fn </span>expire(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Duration {
         <span class="self">self</span>.expire
+    }
+
+    <span class="doccomment">/// Consume OpPresign into (Duration, PresignOperation)
+    </span><span class="kw">pub fn </span>into_parts(<span class="self">self</span>) -&gt; (Duration, PresignOperation) {
+        (<span class="self">self</span>.expire, <span class="self">self</span>.op)
     }
 }
 
@@ -782,12 +935,32 @@
     override_cache_control: <span class="prelude-ty">Option</span>&lt;String&gt;,
     override_content_disposition: <span class="prelude-ty">Option</span>&lt;String&gt;,
     version: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    <span class="doccomment">/// The maximum buffer capability.
+    /// `None` stand for disable buffer.
+    </span>buffer: <span class="prelude-ty">Option</span>&lt;usize&gt;,
 }
 
 <span class="kw">impl </span>OpRead {
     <span class="doccomment">/// Create a default `OpRead` which will read whole content of path.
     </span><span class="kw">pub fn </span>new() -&gt; <span class="self">Self </span>{
         <span class="self">Self</span>::default()
+    }
+
+    <span class="doccomment">/// The into_deterministic function transforms the OpRead into a deterministic version.
+    ///
+    /// This API is utilized because it allows for internal optimizations such as dividing read
+    /// ranges or retrying the read request from where it failed. In these scenarios, the expected
+    /// `ETag` value differs from what users specify in `If-Match` or `If-None-Match`.Therefore,
+    /// we need to eliminate these conditional headers to ensure that the read operation is
+    /// deterministic.
+    ///
+    /// This API is not intended to be used by users and should never be exposed.
+    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>into_deterministic(<span class="self">self</span>) -&gt; <span class="self">Self </span>{
+        <span class="self">Self </span>{
+            if_match: <span class="prelude-val">None</span>,
+            if_none_match: <span class="prelude-val">None</span>,
+            ..<span class="self">self
+        </span>}
     }
 
     <span class="doccomment">/// Create a new OpRead with range.
@@ -867,6 +1040,18 @@
     </span><span class="kw">pub fn </span>version(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
         <span class="self">self</span>.version.as_deref()
     }
+
+    <span class="doccomment">/// Set the buffer capability.
+    </span><span class="kw">pub fn </span>with_buffer(<span class="kw-2">mut </span><span class="self">self</span>, buffer: usize) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.buffer = <span class="prelude-val">Some</span>(buffer);
+
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Get buffer from option.
+    </span><span class="kw">pub fn </span>buffer(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;usize&gt; {
+        <span class="self">self</span>.buffer
+    }
 }
 
 <span class="doccomment">/// Args for `stat` operation.
@@ -874,6 +1059,9 @@
 </span><span class="kw">pub struct </span>OpStat {
     if_match: <span class="prelude-ty">Option</span>&lt;String&gt;,
     if_none_match: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    override_content_type: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    override_cache_control: <span class="prelude-ty">Option</span>&lt;String&gt;,
+    override_content_disposition: <span class="prelude-ty">Option</span>&lt;String&gt;,
     version: <span class="prelude-ty">Option</span>&lt;String&gt;,
 }
 
@@ -903,6 +1091,40 @@
     <span class="doccomment">/// Get If-None-Match from option
     </span><span class="kw">pub fn </span>if_none_match(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
         <span class="self">self</span>.if_none_match.as_deref()
+    }
+
+    <span class="doccomment">/// Sets the content-disposition header that should be send back by the remote read operation.
+    </span><span class="kw">pub fn </span>with_override_content_disposition(<span class="kw-2">mut </span><span class="self">self</span>, content_disposition: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.override_content_disposition = <span class="prelude-val">Some</span>(content_disposition.into());
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Returns the content-disposition header that should be send back by the remote read
+    /// operation.
+    </span><span class="kw">pub fn </span>override_content_disposition(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.override_content_disposition.as_deref()
+    }
+
+    <span class="doccomment">/// Sets the cache-control header that should be send back by the remote read operation.
+    </span><span class="kw">pub fn </span>with_override_cache_control(<span class="kw-2">mut </span><span class="self">self</span>, cache_control: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.override_cache_control = <span class="prelude-val">Some</span>(cache_control.into());
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Returns the cache-control header that should be send back by the remote read operation.
+    </span><span class="kw">pub fn </span>override_cache_control(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.override_cache_control.as_deref()
+    }
+
+    <span class="doccomment">/// Sets the content-type header that should be send back by the remote read operation.
+    </span><span class="kw">pub fn </span>with_override_content_type(<span class="kw-2">mut </span><span class="self">self</span>, content_type: <span class="kw-2">&amp;</span>str) -&gt; <span class="self">Self </span>{
+        <span class="self">self</span>.override_content_type = <span class="prelude-val">Some</span>(content_type.into());
+        <span class="self">self
+    </span>}
+
+    <span class="doccomment">/// Returns the content-type header that should be send back by the remote read operation.
+    </span><span class="kw">pub fn </span>override_content_type(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>str&gt; {
+        <span class="self">self</span>.override_content_type.as_deref()
     }
 
     <span class="doccomment">/// Set the version of the option

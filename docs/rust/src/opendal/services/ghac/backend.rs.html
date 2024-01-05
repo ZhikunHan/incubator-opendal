@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/services/ghac/backend.rs`."><title>backend.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../opendal/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/services/ghac/backend.rs`."><title>backend.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-4e54bb2b497cc83f.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (f688dd684 2024-01-04)" data-channel="nightly" data-search-js="search-c17e98913a53b3b7.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0b2e2def73e61cbe.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../opendal/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -525,184 +527,19 @@
 <a href="#525" id="525">525</a>
 <a href="#526" id="526">526</a>
 <a href="#527" id="527">527</a>
-<a href="#528" id="528">528</a>
-<a href="#529" id="529">529</a>
-<a href="#530" id="530">530</a>
-<a href="#531" id="531">531</a>
-<a href="#532" id="532">532</a>
-<a href="#533" id="533">533</a>
-<a href="#534" id="534">534</a>
-<a href="#535" id="535">535</a>
-<a href="#536" id="536">536</a>
-<a href="#537" id="537">537</a>
-<a href="#538" id="538">538</a>
-<a href="#539" id="539">539</a>
-<a href="#540" id="540">540</a>
-<a href="#541" id="541">541</a>
-<a href="#542" id="542">542</a>
-<a href="#543" id="543">543</a>
-<a href="#544" id="544">544</a>
-<a href="#545" id="545">545</a>
-<a href="#546" id="546">546</a>
-<a href="#547" id="547">547</a>
-<a href="#548" id="548">548</a>
-<a href="#549" id="549">549</a>
-<a href="#550" id="550">550</a>
-<a href="#551" id="551">551</a>
-<a href="#552" id="552">552</a>
-<a href="#553" id="553">553</a>
-<a href="#554" id="554">554</a>
-<a href="#555" id="555">555</a>
-<a href="#556" id="556">556</a>
-<a href="#557" id="557">557</a>
-<a href="#558" id="558">558</a>
-<a href="#559" id="559">559</a>
-<a href="#560" id="560">560</a>
-<a href="#561" id="561">561</a>
-<a href="#562" id="562">562</a>
-<a href="#563" id="563">563</a>
-<a href="#564" id="564">564</a>
-<a href="#565" id="565">565</a>
-<a href="#566" id="566">566</a>
-<a href="#567" id="567">567</a>
-<a href="#568" id="568">568</a>
-<a href="#569" id="569">569</a>
-<a href="#570" id="570">570</a>
-<a href="#571" id="571">571</a>
-<a href="#572" id="572">572</a>
-<a href="#573" id="573">573</a>
-<a href="#574" id="574">574</a>
-<a href="#575" id="575">575</a>
-<a href="#576" id="576">576</a>
-<a href="#577" id="577">577</a>
-<a href="#578" id="578">578</a>
-<a href="#579" id="579">579</a>
-<a href="#580" id="580">580</a>
-<a href="#581" id="581">581</a>
-<a href="#582" id="582">582</a>
-<a href="#583" id="583">583</a>
-<a href="#584" id="584">584</a>
-<a href="#585" id="585">585</a>
-<a href="#586" id="586">586</a>
-<a href="#587" id="587">587</a>
-<a href="#588" id="588">588</a>
-<a href="#589" id="589">589</a>
-<a href="#590" id="590">590</a>
-<a href="#591" id="591">591</a>
-<a href="#592" id="592">592</a>
-<a href="#593" id="593">593</a>
-<a href="#594" id="594">594</a>
-<a href="#595" id="595">595</a>
-<a href="#596" id="596">596</a>
-<a href="#597" id="597">597</a>
-<a href="#598" id="598">598</a>
-<a href="#599" id="599">599</a>
-<a href="#600" id="600">600</a>
-<a href="#601" id="601">601</a>
-<a href="#602" id="602">602</a>
-<a href="#603" id="603">603</a>
-<a href="#604" id="604">604</a>
-<a href="#605" id="605">605</a>
-<a href="#606" id="606">606</a>
-<a href="#607" id="607">607</a>
-<a href="#608" id="608">608</a>
-<a href="#609" id="609">609</a>
-<a href="#610" id="610">610</a>
-<a href="#611" id="611">611</a>
-<a href="#612" id="612">612</a>
-<a href="#613" id="613">613</a>
-<a href="#614" id="614">614</a>
-<a href="#615" id="615">615</a>
-<a href="#616" id="616">616</a>
-<a href="#617" id="617">617</a>
-<a href="#618" id="618">618</a>
-<a href="#619" id="619">619</a>
-<a href="#620" id="620">620</a>
-<a href="#621" id="621">621</a>
-<a href="#622" id="622">622</a>
-<a href="#623" id="623">623</a>
-<a href="#624" id="624">624</a>
-<a href="#625" id="625">625</a>
-<a href="#626" id="626">626</a>
-<a href="#627" id="627">627</a>
-<a href="#628" id="628">628</a>
-<a href="#629" id="629">629</a>
-<a href="#630" id="630">630</a>
-<a href="#631" id="631">631</a>
-<a href="#632" id="632">632</a>
-<a href="#633" id="633">633</a>
-<a href="#634" id="634">634</a>
-<a href="#635" id="635">635</a>
-<a href="#636" id="636">636</a>
-<a href="#637" id="637">637</a>
-<a href="#638" id="638">638</a>
-<a href="#639" id="639">639</a>
-<a href="#640" id="640">640</a>
-<a href="#641" id="641">641</a>
-<a href="#642" id="642">642</a>
-<a href="#643" id="643">643</a>
-<a href="#644" id="644">644</a>
-<a href="#645" id="645">645</a>
-<a href="#646" id="646">646</a>
-<a href="#647" id="647">647</a>
-<a href="#648" id="648">648</a>
-<a href="#649" id="649">649</a>
-<a href="#650" id="650">650</a>
-<a href="#651" id="651">651</a>
-<a href="#652" id="652">652</a>
-<a href="#653" id="653">653</a>
-<a href="#654" id="654">654</a>
-<a href="#655" id="655">655</a>
-<a href="#656" id="656">656</a>
-<a href="#657" id="657">657</a>
-<a href="#658" id="658">658</a>
-<a href="#659" id="659">659</a>
-<a href="#660" id="660">660</a>
-<a href="#661" id="661">661</a>
-<a href="#662" id="662">662</a>
-<a href="#663" id="663">663</a>
-<a href="#664" id="664">664</a>
-<a href="#665" id="665">665</a>
-<a href="#666" id="666">666</a>
-<a href="#667" id="667">667</a>
-<a href="#668" id="668">668</a>
-<a href="#669" id="669">669</a>
-<a href="#670" id="670">670</a>
-<a href="#671" id="671">671</a>
-<a href="#672" id="672">672</a>
-<a href="#673" id="673">673</a>
-<a href="#674" id="674">674</a>
-<a href="#675" id="675">675</a>
-<a href="#676" id="676">676</a>
-<a href="#677" id="677">677</a>
-<a href="#678" id="678">678</a>
-<a href="#679" id="679">679</a>
-<a href="#680" id="680">680</a>
-<a href="#681" id="681">681</a>
-<a href="#682" id="682">682</a>
-<a href="#683" id="683">683</a>
-<a href="#684" id="684">684</a>
-<a href="#685" id="685">685</a>
-<a href="#686" id="686">686</a>
-<a href="#687" id="687">687</a>
-<a href="#688" id="688">688</a>
-<a href="#689" id="689">689</a>
-<a href="#690" id="690">690</a>
-<a href="#691" id="691">691</a>
-<a href="#692" id="692">692</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
 // to you under the Apache License, Version 2.0 (the
-// &quot;License&quot;); you may not use this file except in compliance
+// "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
 //
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
-// &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
@@ -731,31 +568,31 @@
 <span class="kw">use crate</span>::<span class="kw-2">*</span>;
 
 <span class="doccomment">/// The base url for cache url.
-</span><span class="kw">const </span>CACHE_URL_BASE: <span class="kw-2">&amp;</span>str = <span class="string">&quot;_apis/artifactcache&quot;</span>;
+</span><span class="kw">const </span>CACHE_URL_BASE: <span class="kw-2">&amp;</span>str = <span class="string">"_apis/artifactcache"</span>;
 <span class="doccomment">/// Cache API requires to provide an accept header.
-</span><span class="kw">const </span>CACHE_HEADER_ACCEPT: <span class="kw-2">&amp;</span>str = <span class="string">&quot;application/json;api-version=6.0-preview.1&quot;</span>;
+</span><span class="kw">const </span>CACHE_HEADER_ACCEPT: <span class="kw-2">&amp;</span>str = <span class="string">"application/json;api-version=6.0-preview.1"</span>;
 <span class="doccomment">/// The cache url env for ghac.
 ///
 /// The url will be like `https://artifactcache.actions.githubusercontent.com/&lt;id&gt;/`
-</span><span class="kw">const </span>ACTIONS_CACHE_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;ACTIONS_CACHE_URL&quot;</span>;
+</span><span class="kw">const </span>ACTIONS_CACHE_URL: <span class="kw-2">&amp;</span>str = <span class="string">"ACTIONS_CACHE_URL"</span>;
 <span class="doccomment">/// The runtime token env for ghac.
 ///
 /// This token will be valid for 6h and github action will running for 6
-/// hours at most. So we don&#39;t need to refetch it again.
-</span><span class="kw">const </span>ACTIONS_RUNTIME_TOKEN: <span class="kw-2">&amp;</span>str = <span class="string">&quot;ACTIONS_RUNTIME_TOKEN&quot;</span>;
+/// hours at most. So we don't need to refetch it again.
+</span><span class="kw">const </span>ACTIONS_RUNTIME_TOKEN: <span class="kw-2">&amp;</span>str = <span class="string">"ACTIONS_RUNTIME_TOKEN"</span>;
 <span class="doccomment">/// The token provided by workflow;
-</span><span class="kw">const </span>GITHUB_TOKEN: <span class="kw-2">&amp;</span>str = <span class="string">&quot;GITHUB_TOKEN&quot;</span>;
+</span><span class="kw">const </span>GITHUB_TOKEN: <span class="kw-2">&amp;</span>str = <span class="string">"GITHUB_TOKEN"</span>;
 <span class="doccomment">/// The github api url for ghac.
-</span><span class="kw">const </span>GITHUB_API_URL: <span class="kw-2">&amp;</span>str = <span class="string">&quot;GITHUB_API_URL&quot;</span>;
+</span><span class="kw">const </span>GITHUB_API_URL: <span class="kw-2">&amp;</span>str = <span class="string">"GITHUB_API_URL"</span>;
 <span class="doccomment">/// The repository that runs this action.
-</span><span class="kw">const </span>GITHUB_REPOSITORY: <span class="kw-2">&amp;</span>str = <span class="string">&quot;GITHUB_REPOSITORY&quot;</span>;
+</span><span class="kw">const </span>GITHUB_REPOSITORY: <span class="kw-2">&amp;</span>str = <span class="string">"GITHUB_REPOSITORY"</span>;
 <span class="doccomment">/// The github API version that used by OpenDAL.
-</span><span class="kw">const </span>GITHUB_API_VERSION: <span class="kw-2">&amp;</span>str = <span class="string">&quot;2022-11-28&quot;</span>;
+</span><span class="kw">const </span>GITHUB_API_VERSION: <span class="kw-2">&amp;</span>str = <span class="string">"2022-11-28"</span>;
 
 <span class="kw">fn </span>value_or_env(
     explicit_value: <span class="prelude-ty">Option</span>&lt;String&gt;,
     env_var_name: <span class="kw-2">&amp;</span>str,
-    operation: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static </span>str,
+    operation: <span class="kw-2">&amp;</span><span class="lifetime">'static </span>str,
 ) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
     <span class="kw">if let </span><span class="prelude-val">Some</span>(value) = explicit_value {
         <span class="kw">return </span><span class="prelude-val">Ok</span>(value);
@@ -763,7 +600,7 @@
 
     env::var(env_var_name).map_err(|err| {
         <span class="kw">let </span>text = <span class="macro">format!</span>(
-            <span class="string">&quot;{} not found, maybe not in github action environment?&quot;</span>,
+            <span class="string">"{} not found, maybe not in github action environment?"</span>,
             env_var_name
         );
         Error::new(ErrorKind::ConfigInvalid, <span class="kw-2">&amp;</span>text)
@@ -773,96 +610,11 @@
 }
 
 <span class="doccomment">/// GitHub Action Cache Services support.
-///
-/// # Capabilities
-///
-/// This service can be used to:
-///
-/// - [x] stat
-/// - [x] read
-/// - [x] write
-/// - [x] create_dir
-/// - [x] delete
-/// - [x] copy
-/// - [ ] rename
-/// - [ ] list
-/// - [ ] scan
-/// - [ ] presign
-/// - [ ] blocking
-/// # Notes
-///
-/// This service is mainly provided by github actions.
-///
-/// Refer to [Caching dependencies to speed up workflows](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows) for more information.
-///
-/// To make this service work as expected, please make sure to either call `endpoint` and `token` to
-/// configure the URL and credentials, or that the following environment has been setup correctly:
-///
-/// - `ACTIONS_CACHE_URL`
-/// - `ACTIONS_RUNTIME_TOKEN`
-///
-/// They can be exposed by following action:
-///
-/// ```yaml
-/// - name: Configure Cache Env
-///   uses: actions/github-script@v6
-///   with:
-///     script: |
-///       core.exportVariable(&#39;ACTIONS_CACHE_URL&#39;, process.env.ACTIONS_CACHE_URL || &#39;&#39;);
-///       core.exportVariable(&#39;ACTIONS_RUNTIME_TOKEN&#39;, process.env.ACTIONS_RUNTIME_TOKEN || &#39;&#39;);
-/// ```
-///
-/// To make `delete` work as expected, `GITHUB_TOKEN` should also be set via:
-///
-/// ```yaml
-/// env:
-///   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-/// ```
-///
-/// # Limitations
-///
-/// Unlike other services, ghac doesn&#39;t support create empty files.
-/// We provide a `enable_create_simulation()` to support this operation but may result unexpected side effects.
-///
-/// Also, `ghac` is a cache service which means the data store inside could
-/// be automatically evicted at any time.
-///
-/// # Configuration
-///
-/// - `root`: Set the work dir for backend.
-///
-/// Refer to [`GhacBuilder`]&#39;s public API docs for more information.
-///
-/// # Example
-///
-/// ## Via Builder
-///
-/// ```no_run
-/// use std::sync::Arc;
-///
-/// use anyhow::Result;
-/// use opendal::services::Ghac;
-/// use opendal::Operator;
-///
-/// #[tokio::main]
-/// async fn main() -&gt; Result&lt;()&gt; {
-///     // Create ghac backend builder.
-///     let mut builder = Ghac::default();
-///     // Set the root for ghac, all operations will happen under this root.
-///     //
-///     // NOTE: the root must be absolute path.
-///     builder.root(&quot;/path/to/dir&quot;);
-///
-///     let op: Operator = Operator::new(builder)?.finish();
-///
-///     Ok(())
-/// }
-/// ```
-</span><span class="attr">#[derive(Debug, Default)]
+</span><span class="attr">#[doc = <span class="macro">include_str!</span>(<span class="string">"docs.md"</span>)]
+#[derive(Debug, Default)]
 </span><span class="kw">pub struct </span>GhacBuilder {
     root: <span class="prelude-ty">Option</span>&lt;String&gt;,
     version: <span class="prelude-ty">Option</span>&lt;String&gt;,
-    enable_create_simulation: bool,
     endpoint: <span class="prelude-ty">Option</span>&lt;String&gt;,
     runtime_token: <span class="prelude-ty">Option</span>&lt;String&gt;,
 
@@ -882,7 +634,7 @@
     <span class="doccomment">/// set the version that used by cache.
     ///
     /// The version is the unique value that provides namespacing.
-    /// It&#39;s better to make sure this value is only used by this backend.
+    /// It's better to make sure this value is only used by this backend.
     ///
     /// If not set, we will use `opendal` as default.
     </span><span class="kw">pub fn </span>version(<span class="kw-2">&amp;mut </span><span class="self">self</span>, version: <span class="kw-2">&amp;</span>str) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
@@ -890,18 +642,6 @@
             <span class="self">self</span>.version = <span class="prelude-val">Some</span>(version.to_string())
         }
 
-        <span class="self">self
-    </span>}
-
-    <span class="doccomment">/// Enable create simulation for ghac service.
-    ///
-    /// ghac service doesn&#39;t support create empty files. By enabling
-    /// create simulation, we will create a 1 byte file to represent
-    /// empty file.
-    ///
-    /// As a side effect, we can&#39;t create file with only 1 byte anymore.
-    </span><span class="kw">pub fn </span>enable_create_simulation(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-        <span class="self">self</span>.enable_create_simulation = <span class="bool-val">true</span>;
         <span class="self">self
     </span>}
 
@@ -934,7 +674,7 @@
     ///
     /// # Notes
     ///
-    /// This API is part of OpenDAL&#39;s Raw API. `HttpClient` could be changed
+    /// This API is part of OpenDAL's Raw API. `HttpClient` could be changed
     /// during minor updates.
     </span><span class="kw">pub fn </span>http_client(<span class="kw-2">&amp;mut </span><span class="self">self</span>, client: HttpClient) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
         <span class="self">self</span>.http_client = <span class="prelude-val">Some</span>(client);
@@ -949,47 +689,43 @@
     <span class="kw">fn </span>from_map(map: HashMap&lt;String, String&gt;) -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>builder = GhacBuilder::default();
 
-        map.get(<span class="string">&quot;root&quot;</span>).map(|v| builder.root(v));
-        map.get(<span class="string">&quot;version&quot;</span>).map(|v| builder.version(v));
-        map.get(<span class="string">&quot;enable_create_simulation&quot;</span>)
-            .filter(|v| <span class="kw-2">*</span>v == <span class="string">&quot;on&quot; </span>|| <span class="kw-2">*</span>v == <span class="string">&quot;true&quot;</span>)
-            .map(|<span class="kw">_</span>| builder.enable_create_simulation());
+        map.get(<span class="string">"root"</span>).map(|v| builder.root(v));
+        map.get(<span class="string">"version"</span>).map(|v| builder.version(v));
 
         builder
     }
 
     <span class="kw">fn </span>build(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>::Accessor&gt; {
-        <span class="macro">debug!</span>(<span class="string">&quot;backend build started: {:?}&quot;</span>, <span class="self">self</span>);
+        <span class="macro">debug!</span>(<span class="string">"backend build started: {:?}"</span>, <span class="self">self</span>);
 
         <span class="kw">let </span>root = normalize_root(<span class="kw-2">&amp;</span><span class="self">self</span>.root.take().unwrap_or_default());
-        <span class="macro">debug!</span>(<span class="string">&quot;backend use root {}&quot;</span>, root);
+        <span class="macro">debug!</span>(<span class="string">"backend use root {}"</span>, root);
 
         <span class="kw">let </span>client = <span class="kw">if let </span><span class="prelude-val">Some</span>(client) = <span class="self">self</span>.http_client.take() {
             client
         } <span class="kw">else </span>{
             HttpClient::new().map_err(|err| {
-                err.with_operation(<span class="string">&quot;Builder::build&quot;</span>)
-                    .with_context(<span class="string">&quot;service&quot;</span>, Scheme::Ghac)
+                err.with_operation(<span class="string">"Builder::build"</span>)
+                    .with_context(<span class="string">"service"</span>, Scheme::Ghac)
             })<span class="question-mark">?
         </span>};
 
         <span class="kw">let </span>backend = GhacBackend {
             root,
-            enable_create_simulation: <span class="self">self</span>.enable_create_simulation,
 
-            cache_url: value_or_env(<span class="self">self</span>.endpoint.take(), ACTIONS_CACHE_URL, <span class="string">&quot;Builder::build&quot;</span>)<span class="question-mark">?</span>,
+            cache_url: value_or_env(<span class="self">self</span>.endpoint.take(), ACTIONS_CACHE_URL, <span class="string">"Builder::build"</span>)<span class="question-mark">?</span>,
             catch_token: value_or_env(
                 <span class="self">self</span>.runtime_token.take(),
                 ACTIONS_RUNTIME_TOKEN,
-                <span class="string">&quot;Builder::build&quot;</span>,
+                <span class="string">"Builder::build"</span>,
             )<span class="question-mark">?</span>,
             version: <span class="self">self
                 </span>.version
                 .clone()
-                .unwrap_or_else(|| <span class="string">&quot;opendal&quot;</span>.to_string()),
+                .unwrap_or_else(|| <span class="string">"opendal"</span>.to_string()),
 
             api_url: env::var(GITHUB_API_URL)
-                .unwrap_or_else(|<span class="kw">_</span>| <span class="string">&quot;https://api.github.com&quot;</span>.to_string()),
+                .unwrap_or_else(|<span class="kw">_</span>| <span class="string">"https://api.github.com"</span>.to_string()),
             api_token: env::var(GITHUB_TOKEN).unwrap_or_default(),
             repo: env::var(GITHUB_REPOSITORY).unwrap_or_default(),
 
@@ -1003,9 +739,8 @@
 <span class="doccomment">/// Backend for github action cache services.
 </span><span class="attr">#[derive(Debug, Clone)]
 </span><span class="kw">pub struct </span>GhacBackend {
-    <span class="comment">// root should end with &quot;/&quot;
+    <span class="comment">// root should end with "/"
     </span>root: String,
-    enable_create_simulation: bool,
 
     cache_url: String,
     catch_token: String,
@@ -1021,11 +756,11 @@
 <span class="attr">#[async_trait]
 </span><span class="kw">impl </span>Accessor <span class="kw">for </span>GhacBackend {
     <span class="kw">type </span>Reader = IncomingAsyncBody;
-    <span class="kw">type </span>BlockingReader = ();
     <span class="kw">type </span>Writer = GhacWriter;
+    <span class="kw">type </span>Lister = ();
+    <span class="kw">type </span>BlockingReader = ();
     <span class="kw">type </span>BlockingWriter = ();
-    <span class="kw">type </span>Pager = ();
-    <span class="kw">type </span>BlockingPager = ();
+    <span class="kw">type </span>BlockingLister = ();
 
     <span class="kw">fn </span>info(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; AccessorInfo {
         <span class="kw">let </span><span class="kw-2">mut </span>am = AccessorInfo::default();
@@ -1041,7 +776,6 @@
 
                 write: <span class="bool-val">true</span>,
                 write_can_multi: <span class="bool-val">true</span>,
-                create_dir: <span class="bool-val">true</span>,
                 delete: <span class="bool-val">true</span>,
 
                 ..Default::default()
@@ -1049,61 +783,31 @@
         am
     }
 
-    <span class="kw">async fn </span>create_dir(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, <span class="kw">_</span>: OpCreateDir) -&gt; <span class="prelude-ty">Result</span>&lt;RpCreateDir&gt; {
-        <span class="comment">// ignore creation of dir.
-        </span><span class="kw">if </span>path.ends_with(<span class="string">&#39;/&#39;</span>) {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(RpCreateDir::default());
-        }
-        <span class="kw">if </span>!<span class="self">self</span>.enable_create_simulation {
-            <span class="kw">return </span><span class="prelude-val">Err</span>(Error::new(
-                ErrorKind::Unsupported,
-                <span class="string">&quot;ghac service doesn&#39;t support create empty file&quot;</span>,
-            ));
-        }
-
-        <span class="kw">let </span>req = <span class="self">self</span>.ghac_reserve(path).<span class="kw">await</span><span class="question-mark">?</span>;
+    <span class="kw">async fn </span>stat(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, <span class="kw">_</span>: OpStat) -&gt; <span class="prelude-ty">Result</span>&lt;RpStat&gt; {
+        <span class="kw">let </span>req = <span class="self">self</span>.ghac_query(path).<span class="kw">await</span><span class="question-mark">?</span>;
 
         <span class="kw">let </span>resp = <span class="self">self</span>.client.send(req).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">let </span>cache_id = <span class="kw">if </span>resp.status().is_success() {
+        <span class="kw">let </span>location = <span class="kw">if </span>resp.status() == StatusCode::OK {
             <span class="kw">let </span>slc = resp.into_body().bytes().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>reserve_resp: GhacReserveResponse =
+            <span class="kw">let </span>query_resp: GhacQueryResponse =
                 serde_json::from_slice(<span class="kw-2">&amp;</span>slc).map_err(new_json_deserialize_error)<span class="question-mark">?</span>;
-            reserve_resp.cache_id
-        } <span class="kw">else if </span>resp.status().as_u16() == StatusCode::CONFLICT {
-            <span class="comment">// If the file is already exist, just return Ok.
-            </span><span class="kw">return </span><span class="prelude-val">Ok</span>(RpCreateDir::default());
+            query_resp.archive_location
         } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(parse_error(resp)
-                .<span class="kw">await
-                </span>.map(|err| err.with_operation(<span class="string">&quot;Backend::ghac_reserve&quot;</span>))<span class="question-mark">?</span>);
+            <span class="kw">return </span><span class="prelude-val">Err</span>(parse_error(resp).<span class="kw">await</span><span class="question-mark">?</span>);
         };
 
-        <span class="comment">// Write only 1 byte to allow create.
-        </span><span class="kw">let </span>req = <span class="self">self
-            </span>.ghac_upload(cache_id, <span class="number">0</span>, <span class="number">1</span>, AsyncBody::Bytes(Bytes::from_static(<span class="kw-2">&amp;</span>[<span class="number">0</span>])))
-            .<span class="kw">await</span><span class="question-mark">?</span>;
-
+        <span class="kw">let </span>req = <span class="self">self</span>.ghac_head_location(<span class="kw-2">&amp;</span>location).<span class="kw">await</span><span class="question-mark">?</span>;
         <span class="kw">let </span>resp = <span class="self">self</span>.client.send(req).<span class="kw">await</span><span class="question-mark">?</span>;
 
-        <span class="kw">if </span>resp.status().is_success() {
-            resp.into_body().consume().<span class="kw">await</span><span class="question-mark">?</span>;
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(parse_error(resp)
-                .<span class="kw">await
-                </span>.map(|err| err.with_operation(<span class="string">&quot;Backend::ghac_upload&quot;</span>))<span class="question-mark">?</span>);
-        }
+        <span class="kw">let </span>status = resp.status();
+        <span class="kw">match </span>status {
+            StatusCode::OK =&gt; {
+                <span class="kw">let </span>meta = parse_into_metadata(path, resp.headers())<span class="question-mark">?</span>;
 
-        <span class="kw">let </span>req = <span class="self">self</span>.ghac_commit(cache_id, <span class="number">1</span>).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>resp = <span class="self">self</span>.client.send(req).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">if </span>resp.status().is_success() {
-            resp.into_body().consume().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="prelude-val">Ok</span>(RpCreateDir::default())
-        } <span class="kw">else </span>{
-            <span class="prelude-val">Err</span>(parse_error(resp)
-                .<span class="kw">await
-                </span>.map(|err| err.with_operation(<span class="string">&quot;Backend::ghac_commit&quot;</span>))<span class="question-mark">?</span>)
+                <span class="prelude-val">Ok</span>(RpStat::new(meta))
+            }
+            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(parse_error(resp).<span class="kw">await</span><span class="question-mark">?</span>),
         }
     }
 
@@ -1127,8 +831,16 @@
         <span class="kw">let </span>status = resp.status();
         <span class="kw">match </span>status {
             StatusCode::OK | StatusCode::PARTIAL_CONTENT =&gt; {
-                <span class="kw">let </span>meta = parse_into_metadata(path, resp.headers())<span class="question-mark">?</span>;
-                <span class="prelude-val">Ok</span>((RpRead::with_metadata(meta), resp.into_body()))
+                <span class="kw">let </span>size = parse_content_length(resp.headers())<span class="question-mark">?</span>;
+                <span class="kw">let </span>range = parse_content_range(resp.headers())<span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((
+                    RpRead::new().with_size(size).with_range(range),
+                    resp.into_body(),
+                ))
+            }
+            StatusCode::RANGE_NOT_SATISFIABLE =&gt; {
+                resp.into_body().consume().<span class="kw">await</span><span class="question-mark">?</span>;
+                <span class="prelude-val">Ok</span>((RpRead::new().with_size(<span class="prelude-val">Some</span>(<span class="number">0</span>)), IncomingAsyncBody::empty()))
             }
             <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(parse_error(resp).<span class="kw">await</span><span class="question-mark">?</span>),
         }
@@ -1147,57 +859,17 @@
         } <span class="kw">else </span>{
             <span class="kw">return </span><span class="prelude-val">Err</span>(parse_error(resp)
                 .<span class="kw">await
-                </span>.map(|err| err.with_operation(<span class="string">&quot;Backend::ghac_reserve&quot;</span>))<span class="question-mark">?</span>);
+                </span>.map(|err| err.with_operation(<span class="string">"Backend::ghac_reserve"</span>))<span class="question-mark">?</span>);
         };
 
         <span class="prelude-val">Ok</span>((RpWrite::default(), GhacWriter::new(<span class="self">self</span>.clone(), cache_id)))
-    }
-
-    <span class="kw">async fn </span>stat(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, <span class="kw">_</span>: OpStat) -&gt; <span class="prelude-ty">Result</span>&lt;RpStat&gt; {
-        <span class="comment">// Stat root always returns a DIR.
-        </span><span class="kw">if </span>path == <span class="string">&quot;/&quot; </span>{
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(RpStat::new(Metadata::new(EntryMode::DIR)));
-        }
-
-        <span class="kw">let </span>req = <span class="self">self</span>.ghac_query(path).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>resp = <span class="self">self</span>.client.send(req).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>location = <span class="kw">if </span>resp.status() == StatusCode::OK {
-            <span class="kw">let </span>slc = resp.into_body().bytes().<span class="kw">await</span><span class="question-mark">?</span>;
-            <span class="kw">let </span>query_resp: GhacQueryResponse =
-                serde_json::from_slice(<span class="kw-2">&amp;</span>slc).map_err(new_json_deserialize_error)<span class="question-mark">?</span>;
-            query_resp.archive_location
-        } <span class="kw">else if </span>resp.status() == StatusCode::NO_CONTENT &amp;&amp; path.ends_with(<span class="string">&#39;/&#39;</span>) {
-            <span class="kw">return </span><span class="prelude-val">Ok</span>(RpStat::new(Metadata::new(EntryMode::DIR)));
-        } <span class="kw">else </span>{
-            <span class="kw">return </span><span class="prelude-val">Err</span>(parse_error(resp).<span class="kw">await</span><span class="question-mark">?</span>);
-        };
-
-        <span class="kw">let </span>req = <span class="self">self</span>.ghac_head_location(<span class="kw-2">&amp;</span>location).<span class="kw">await</span><span class="question-mark">?</span>;
-        <span class="kw">let </span>resp = <span class="self">self</span>.client.send(req).<span class="kw">await</span><span class="question-mark">?</span>;
-
-        <span class="kw">let </span>status = resp.status();
-        <span class="kw">match </span>status {
-            StatusCode::OK =&gt; {
-                <span class="kw">let </span><span class="kw-2">mut </span>meta = parse_into_metadata(path, resp.headers())<span class="question-mark">?</span>;
-
-                <span class="comment">// Hack for enable_create_simulation.
-                </span><span class="kw">if </span><span class="self">self</span>.enable_create_simulation &amp;&amp; meta.content_length_raw() == <span class="prelude-val">Some</span>(<span class="number">1</span>) {
-                    meta.set_content_length(<span class="number">0</span>);
-                }
-
-                <span class="prelude-val">Ok</span>(RpStat::new(meta))
-            }
-            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(parse_error(resp).<span class="kw">await</span><span class="question-mark">?</span>),
-        }
     }
 
     <span class="kw">async fn </span>delete(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str, <span class="kw">_</span>: OpDelete) -&gt; <span class="prelude-ty">Result</span>&lt;RpDelete&gt; {
         <span class="kw">if </span><span class="self">self</span>.api_token.is_empty() {
             <span class="kw">return </span><span class="prelude-val">Err</span>(Error::new(
                 ErrorKind::PermissionDenied,
-                <span class="string">&quot;github token is not configured, delete is permission denied&quot;</span>,
+                <span class="string">"github token is not configured, delete is permission denied"</span>,
             ));
         }
 
@@ -1217,14 +889,14 @@
         <span class="kw">let </span>p = build_abs_path(<span class="kw-2">&amp;</span><span class="self">self</span>.root, path);
 
         <span class="kw">let </span>url = <span class="macro">format!</span>(
-            <span class="string">&quot;{}{CACHE_URL_BASE}/cache?keys={}&amp;version={}&quot;</span>,
+            <span class="string">"{}{CACHE_URL_BASE}/cache?keys={}&amp;version={}"</span>,
             <span class="self">self</span>.cache_url,
             percent_encode_path(<span class="kw-2">&amp;</span>p),
             <span class="self">self</span>.version
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::get(<span class="kw-2">&amp;</span>url);
-        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.catch_token));
+        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">"Bearer {}"</span>, <span class="self">self</span>.catch_token));
         req = req.header(ACCEPT, CACHE_HEADER_ACCEPT);
 
         <span class="kw">let </span>req = req
@@ -1242,14 +914,14 @@
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::get(location);
 
         <span class="kw">if </span>!range.is_full() {
-            <span class="comment">// ghac is backed by azblob, and azblob doesn&#39;t support
+            <span class="comment">// ghac is backed by azblob, and azblob doesn't support
             // read with suffix range
             //
             // ref: https://learn.microsoft.com/en-us/rest/api/storageservices/specifying-the-range-header-for-blob-service-operations
             </span><span class="kw">if </span>range.offset().is_none() &amp;&amp; range.size().is_some() {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(Error::new(
                     ErrorKind::Unsupported,
-                    <span class="string">&quot;ghac doesn&#39;t support read with suffix range&quot;</span>,
+                    <span class="string">"ghac doesn't support read with suffix range"</span>,
                 ));
             }
 
@@ -1268,7 +940,7 @@
     <span class="kw">async fn </span>ghac_reserve(<span class="kw-2">&amp;</span><span class="self">self</span>, path: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;Request&lt;AsyncBody&gt;&gt; {
         <span class="kw">let </span>p = build_abs_path(<span class="kw-2">&amp;</span><span class="self">self</span>.root, path);
 
-        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">&quot;{}{CACHE_URL_BASE}/caches&quot;</span>, <span class="self">self</span>.cache_url);
+        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"{}{CACHE_URL_BASE}/caches"</span>, <span class="self">self</span>.cache_url);
 
         <span class="kw">let </span>bs = serde_json::to_vec(<span class="kw-2">&amp;</span>GhacReserveRequest {
             key: p,
@@ -1277,10 +949,10 @@
         .map_err(new_json_serialize_error)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::post(<span class="kw-2">&amp;</span>url);
-        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.catch_token));
+        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">"Bearer {}"</span>, <span class="self">self</span>.catch_token));
         req = req.header(ACCEPT, CACHE_HEADER_ACCEPT);
         req = req.header(CONTENT_LENGTH, bs.len());
-        req = req.header(CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>);
+        req = req.header(CONTENT_TYPE, <span class="string">"application/json"</span>);
 
         <span class="kw">let </span>req = req
             .body(AsyncBody::Bytes(Bytes::from(bs)))
@@ -1296,13 +968,13 @@
         size: u64,
         body: AsyncBody,
     ) -&gt; <span class="prelude-ty">Result</span>&lt;Request&lt;AsyncBody&gt;&gt; {
-        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">&quot;{}{CACHE_URL_BASE}/caches/{cache_id}&quot;</span>, <span class="self">self</span>.cache_url);
+        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"{}{CACHE_URL_BASE}/caches/{cache_id}"</span>, <span class="self">self</span>.cache_url);
 
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::patch(<span class="kw-2">&amp;</span>url);
-        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.catch_token));
+        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">"Bearer {}"</span>, <span class="self">self</span>.catch_token));
         req = req.header(ACCEPT, CACHE_HEADER_ACCEPT);
         req = req.header(CONTENT_LENGTH, size);
-        req = req.header(CONTENT_TYPE, <span class="string">&quot;application/octet-stream&quot;</span>);
+        req = req.header(CONTENT_TYPE, <span class="string">"application/octet-stream"</span>);
         req = req.header(
             CONTENT_RANGE,
             BytesContentRange::default()
@@ -1316,15 +988,15 @@
     }
 
     <span class="kw">pub async fn </span>ghac_commit(<span class="kw-2">&amp;</span><span class="self">self</span>, cache_id: i64, size: u64) -&gt; <span class="prelude-ty">Result</span>&lt;Request&lt;AsyncBody&gt;&gt; {
-        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">&quot;{}{CACHE_URL_BASE}/caches/{cache_id}&quot;</span>, <span class="self">self</span>.cache_url);
+        <span class="kw">let </span>url = <span class="macro">format!</span>(<span class="string">"{}{CACHE_URL_BASE}/caches/{cache_id}"</span>, <span class="self">self</span>.cache_url);
 
         <span class="kw">let </span>bs =
             serde_json::to_vec(<span class="kw-2">&amp;</span>GhacCommitRequest { size }).map_err(new_json_serialize_error)<span class="question-mark">?</span>;
 
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::post(<span class="kw-2">&amp;</span>url);
-        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.catch_token));
+        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">"Bearer {}"</span>, <span class="self">self</span>.catch_token));
         req = req.header(ACCEPT, CACHE_HEADER_ACCEPT);
-        req = req.header(CONTENT_TYPE, <span class="string">&quot;application/json&quot;</span>);
+        req = req.header(CONTENT_TYPE, <span class="string">"application/json"</span>);
         req = req.header(CONTENT_LENGTH, bs.len());
 
         <span class="kw">let </span>req = req
@@ -1338,16 +1010,16 @@
         <span class="kw">let </span>p = build_abs_path(<span class="kw-2">&amp;</span><span class="self">self</span>.root, path);
 
         <span class="kw">let </span>url = <span class="macro">format!</span>(
-            <span class="string">&quot;{}/repos/{}/actions/caches?key={}&quot;</span>,
+            <span class="string">"{}/repos/{}/actions/caches?key={}"</span>,
             <span class="self">self</span>.api_url,
             <span class="self">self</span>.repo,
             percent_encode_path(<span class="kw-2">&amp;</span>p)
         );
 
         <span class="kw">let </span><span class="kw-2">mut </span>req = Request::delete(<span class="kw-2">&amp;</span>url);
-        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">&quot;Bearer {}&quot;</span>, <span class="self">self</span>.api_token));
-        req = req.header(USER_AGENT, <span class="macro">format!</span>(<span class="string">&quot;opendal/{VERSION} (service ghac)&quot;</span>));
-        req = req.header(<span class="string">&quot;X-GitHub-Api-Version&quot;</span>, GITHUB_API_VERSION);
+        req = req.header(AUTHORIZATION, <span class="macro">format!</span>(<span class="string">"Bearer {}"</span>, <span class="self">self</span>.api_token));
+        req = req.header(USER_AGENT, <span class="macro">format!</span>(<span class="string">"opendal/{VERSION} (service ghac)"</span>));
+        req = req.header(<span class="string">"X-GitHub-Api-Version"</span>, GITHUB_API_VERSION);
 
         <span class="kw">let </span>req = req
             .body(AsyncBody::Empty)
@@ -1358,7 +1030,7 @@
 }
 
 <span class="attr">#[derive(Deserialize)]
-#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">struct </span>GhacQueryResponse {
     <span class="comment">// Not used fields.
     // cache_key: String,
@@ -1373,7 +1045,7 @@
 }
 
 <span class="attr">#[derive(Deserialize)]
-#[serde(rename_all = <span class="string">&quot;camelCase&quot;</span>)]
+#[serde(rename_all = <span class="string">"camelCase"</span>)]
 </span><span class="kw">struct </span>GhacReserveResponse {
     cache_id: i64,
 }

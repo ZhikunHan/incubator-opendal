@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/types/operator/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Bold-a2c9cd1067f8b328.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-cb6f1f67f1bcd037.css" id="mainThemeStyle"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.73.0 (cc66ad468 2023-10-03)" data-channel="1.73.0" data-search-js="search-6dfdfced5eff6596.js" data-settings-js="settings-de11bff964e9d4e5.js" data-settings-css="settings-8c76f75bfb6bd192.css" data-theme-light-css="light-1596385f77d47ef2.css" data-theme-dark-css="dark-0a43001d3fc2282c.css" data-theme-ayu-css="ayu-fd19013d6ce078bf.css" ><script src="../../../../static.files/storage-db41da1a38ea3cb8.js"></script><script defer src="../../../../static.files/src-script-3280b574d94e47b4.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0795b7d26be81095.js"></script><noscript><link rel="stylesheet" media="(prefers-color-scheme:light)" href="../../../../static.files/light-1596385f77d47ef2.css"><link rel="stylesheet" media="(prefers-color-scheme:dark)" href="../../../../static.files/dark-0a43001d3fc2282c.css"><link rel="stylesheet" href="../../../../static.files/noscript-cffde32267a19fd6.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"></nav><main><nav class="sub"><a class="sub-logo-container" href="../../../../opendal/index.html"><img class="rust-logo" src="../../../../static.files/rust-logo-151179464ae7ed46.svg" alt="logo"></a><form class="search-form"><span></span><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" title="help" tabindex="-1"><a href="../../../../help.html">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `core/src/types/operator/builder.rs`."><title>builder.rs - source</title><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceSerif4-Regular-46f98efaafac5295.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Regular-018c141bf0843ffd.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/FiraSans-Medium-8f9a781e4970d388.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Regular-562dcc5011b6de7d.ttf.woff2"><link rel="preload" as="font" type="font/woff2" crossorigin href="../../../../static.files/SourceCodePro-Semibold-d899c5a5c4aeb14a.ttf.woff2"><link rel="stylesheet" href="../../../../static.files/normalize-76eba96aa4d2e634.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-4e54bb2b497cc83f.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="opendal" data-themes="" data-resource-suffix="" data-rustdoc-version="1.77.0-nightly (f688dd684 2024-01-04)" data-channel="nightly" data-search-js="search-c17e98913a53b3b7.js" data-settings-js="settings-4313503d2e1961c2.js" ><script src="../../../../static.files/storage-f2adc0d6ca4d09fb.js"></script><script defer src="../../../../static.files/src-script-e66d777a5a92e9b2.js"></script><script defer src="../../../../src-files.js"></script><script defer src="../../../../static.files/main-0b2e2def73e61cbe.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-04d5337699b92874.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-16x16-8b506e7a72182f1c.png"><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-422f7d1d52889060.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-2c020d218678b618.svg"></head><body class="rustdoc src"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title">
+            <h2>Files</h2></div></nav><div class="sidebar-resizer"></div>
+    <main><nav class="sub"><form class="search-form"><span></span><div id="sidebar-button" tabindex="-1"><a href="../../../../opendal/all.html" title="show sidebar"></a></div><input class="search-input" name="search" aria-label="Run search in the documentation" autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"><div id="help-button" tabindex="-1"><a href="../../../../help.html" title="help">?</a></div><div id="settings-menu" tabindex="-1"><a href="../../../../settings.html" title="settings"><img width="22" height="22" alt="Change settings" src="../../../../static.files/wheel-7b819b6101059cd0.svg"></a></div></form></nav><section id="main-content" class="content"><div class="example-wrap"><div data-nosnippet><pre class="src-line-numbers"><a href="#1" id="1">1</a>
 <a href="#2" id="2">2</a>
 <a href="#3" id="3">3</a>
 <a href="#4" id="4">4</a>
@@ -375,19 +377,55 @@
 <a href="#375" id="375">375</a>
 <a href="#376" id="376">376</a>
 <a href="#377" id="377">377</a>
+<a href="#378" id="378">378</a>
+<a href="#379" id="379">379</a>
+<a href="#380" id="380">380</a>
+<a href="#381" id="381">381</a>
+<a href="#382" id="382">382</a>
+<a href="#383" id="383">383</a>
+<a href="#384" id="384">384</a>
+<a href="#385" id="385">385</a>
+<a href="#386" id="386">386</a>
+<a href="#387" id="387">387</a>
+<a href="#388" id="388">388</a>
+<a href="#389" id="389">389</a>
+<a href="#390" id="390">390</a>
+<a href="#391" id="391">391</a>
+<a href="#392" id="392">392</a>
+<a href="#393" id="393">393</a>
+<a href="#394" id="394">394</a>
+<a href="#395" id="395">395</a>
+<a href="#396" id="396">396</a>
+<a href="#397" id="397">397</a>
+<a href="#398" id="398">398</a>
+<a href="#399" id="399">399</a>
+<a href="#400" id="400">400</a>
+<a href="#401" id="401">401</a>
+<a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
 </pre></div><pre class="rust"><code><span class="comment">// Licensed to the Apache Software Foundation (ASF) under one
 // or more contributor license agreements.  See the NOTICE file
 // distributed with this work for additional information
 // regarding copyright ownership.  The ASF licenses this file
 // to you under the Apache License, Version 2.0 (the
-// &quot;License&quot;); you may not use this file except in compliance
+// "License"); you may not use this file except in compliance
 // with the License.  You may obtain a copy of the License at
 //
 //   http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing,
 // software distributed under the License is distributed on an
-// &quot;AS IS&quot; BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
 // KIND, either express or implied.  See the License for the
 // specific language governing permissions and limitations
 // under the License.
@@ -414,7 +452,7 @@
 ///     // Set the root for fs, all operations will happen under this root.
 ///     //
 ///     // NOTE: the root must be absolute path.
-///     builder.root(&quot;/tmp&quot;);
+///     builder.root("/tmp");
 ///
 ///     // Build an `Operator` to start operating the storage.
 ///     let op: Operator = Operator::new(builder)?.finish();
@@ -425,7 +463,7 @@
 </span><span class="kw">impl </span>Operator {
     <span class="doccomment">/// Create a new operator with input builder.
     ///
-    /// OpenDAL will call `builder.build()` internally, so we don&#39;t need
+    /// OpenDAL will call `builder.build()` internally, so we don't need
     /// to import `opendal::Builder` trait.
     ///
     /// # Examples
@@ -443,7 +481,7 @@
     ///     // Set the root for fs, all operations will happen under this root.
     ///     //
     ///     // NOTE: the root must be absolute path.
-    ///     builder.root(&quot;/tmp&quot;);
+    ///     builder.root("/tmp");
     ///
     ///     // Build an `Operator` to start operating the storage.
     ///     let op: Operator = Operator::new(builder)?.finish();
@@ -480,7 +518,7 @@
     ///         // Set the root for fs, all operations will happen under this root.
     ///         //
     ///         // NOTE: the root must be absolute path.
-    ///         (&quot;root&quot;.to_string(), &quot;/tmp&quot;.to_string()),
+    ///         ("root".to_string(), "/tmp".to_string()),
     ///     ]);
     ///
     ///     // Build an `Operator` to start operating the storage.
@@ -519,7 +557,7 @@
     ///         // Set the root for fs, all operations will happen under this root.
     ///         //
     ///         // NOTE: the root must be absolute path.
-    ///         (&quot;root&quot;.to_string(), &quot;/tmp&quot;.to_string()),
+    ///         ("root".to_string(), "/tmp".to_string()),
     ///     ]);
     ///
     ///     // Build an `Operator` to start operating the storage.
@@ -530,84 +568,120 @@
     /// ```
     </span><span class="kw">pub fn </span>via_map(scheme: Scheme, map: HashMap&lt;String, String&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;Operator&gt; {
         <span class="kw">let </span>op = <span class="kw">match </span>scheme {
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-atomicserver&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-atomicserver"</span>)]
             </span>Scheme::Atomicserver =&gt; <span class="self">Self</span>::from_map::&lt;services::Atomicserver&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-azblob&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-alluxio"</span>)]
+            </span>Scheme::Alluxio =&gt; <span class="self">Self</span>::from_map::&lt;services::Alluxio&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-upyun"</span>)]
+            </span>Scheme::Upyun =&gt; <span class="self">Self</span>::from_map::&lt;services::Upyun&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-yandex-disk"</span>)]
+            </span>Scheme::YandexDisk =&gt; <span class="self">Self</span>::from_map::&lt;services::YandexDisk&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-pcloud"</span>)]
+            </span>Scheme::Pcloud =&gt; <span class="self">Self</span>::from_map::&lt;services::Pcloud&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-chainsafe"</span>)]
+            </span>Scheme::Chainsafe =&gt; <span class="self">Self</span>::from_map::&lt;services::Chainsafe&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-azblob"</span>)]
             </span>Scheme::Azblob =&gt; <span class="self">Self</span>::from_map::&lt;services::Azblob&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-Azdls&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-azdls"</span>)]
             </span>Scheme::Azdls =&gt; <span class="self">Self</span>::from_map::&lt;services::Azdls&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-cacache&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-azfile"</span>)]
+            </span>Scheme::Azfile =&gt; <span class="self">Self</span>::from_map::&lt;services::Azfile&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-b2"</span>)]
+            </span>Scheme::B2 =&gt; <span class="self">Self</span>::from_map::&lt;services::B2&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-cacache"</span>)]
             </span>Scheme::Cacache =&gt; <span class="self">Self</span>::from_map::&lt;services::Cacache&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-cos&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-cos"</span>)]
             </span>Scheme::Cos =&gt; <span class="self">Self</span>::from_map::&lt;services::Cos&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-dashmap&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-d1"</span>)]
+            </span>Scheme::D1 =&gt; <span class="self">Self</span>::from_map::&lt;services::D1&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-dashmap"</span>)]
             </span>Scheme::Dashmap =&gt; <span class="self">Self</span>::from_map::&lt;services::Dashmap&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-etcd&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-dropbox"</span>)]
+            </span>Scheme::Dropbox =&gt; <span class="self">Self</span>::from_map::&lt;services::Dropbox&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-etcd"</span>)]
             </span>Scheme::Etcd =&gt; <span class="self">Self</span>::from_map::&lt;services::Etcd&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-foundationdb&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-foundationdb"</span>)]
             </span>Scheme::Foundationdb =&gt; <span class="self">Self</span>::from_map::&lt;services::Foundationdb&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-fs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-fs"</span>)]
             </span>Scheme::Fs =&gt; <span class="self">Self</span>::from_map::&lt;services::Fs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-ftp&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-ftp"</span>)]
             </span>Scheme::Ftp =&gt; <span class="self">Self</span>::from_map::&lt;services::Ftp&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-gcs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-gcs"</span>)]
             </span>Scheme::Gcs =&gt; <span class="self">Self</span>::from_map::&lt;services::Gcs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-ghac&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-ghac"</span>)]
             </span>Scheme::Ghac =&gt; <span class="self">Self</span>::from_map::&lt;services::Ghac&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-hdfs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-gridfs"</span>)]
+            </span>Scheme::Gridfs =&gt; <span class="self">Self</span>::from_map::&lt;services::Gridfs&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-hdfs"</span>)]
             </span>Scheme::Hdfs =&gt; <span class="self">Self</span>::from_map::&lt;services::Hdfs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-http&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-http"</span>)]
             </span>Scheme::Http =&gt; <span class="self">Self</span>::from_map::&lt;services::Http&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-ipfs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-huggingface"</span>)]
+            </span>Scheme::Huggingface =&gt; <span class="self">Self</span>::from_map::&lt;services::Huggingface&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-ipfs"</span>)]
             </span>Scheme::Ipfs =&gt; <span class="self">Self</span>::from_map::&lt;services::Ipfs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-ipmfs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-ipmfs"</span>)]
             </span>Scheme::Ipmfs =&gt; <span class="self">Self</span>::from_map::&lt;services::Ipmfs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-memcached&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-libsql"</span>)]
+            </span>Scheme::Libsql =&gt; <span class="self">Self</span>::from_map::&lt;services::Libsql&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-memcached"</span>)]
             </span>Scheme::Memcached =&gt; <span class="self">Self</span>::from_map::&lt;services::Memcached&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-memory&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-memory"</span>)]
             </span>Scheme::Memory =&gt; <span class="self">Self</span>::from_map::&lt;services::Memory&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-mini-moka&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-mini-moka"</span>)]
             </span>Scheme::MiniMoka =&gt; <span class="self">Self</span>::from_map::&lt;services::MiniMoka&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-moka&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-moka"</span>)]
             </span>Scheme::Moka =&gt; <span class="self">Self</span>::from_map::&lt;services::Moka&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-obs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-mysql"</span>)]
+            </span>Scheme::Mysql =&gt; <span class="self">Self</span>::from_map::&lt;services::Mysql&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-obs"</span>)]
             </span>Scheme::Obs =&gt; <span class="self">Self</span>::from_map::&lt;services::Obs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-onedrive&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-onedrive"</span>)]
             </span>Scheme::Onedrive =&gt; <span class="self">Self</span>::from_map::&lt;services::Onedrive&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-gdrive&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-postgresql"</span>)]
+            </span>Scheme::Postgresql =&gt; <span class="self">Self</span>::from_map::&lt;services::Postgresql&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-gdrive"</span>)]
             </span>Scheme::Gdrive =&gt; <span class="self">Self</span>::from_map::&lt;services::Gdrive&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-oss&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-oss"</span>)]
             </span>Scheme::Oss =&gt; <span class="self">Self</span>::from_map::&lt;services::Oss&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-persy&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-persy"</span>)]
             </span>Scheme::Persy =&gt; <span class="self">Self</span>::from_map::&lt;services::Persy&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-redis&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-redis"</span>)]
             </span>Scheme::Redis =&gt; <span class="self">Self</span>::from_map::&lt;services::Redis&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-rocksdb&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-rocksdb"</span>)]
             </span>Scheme::Rocksdb =&gt; <span class="self">Self</span>::from_map::&lt;services::Rocksdb&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-s3&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-s3"</span>)]
             </span>Scheme::S3 =&gt; <span class="self">Self</span>::from_map::&lt;services::S3&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-sftp&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-seafile"</span>)]
+            </span>Scheme::Seafile =&gt; <span class="self">Self</span>::from_map::&lt;services::Seafile&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-sftp"</span>)]
             </span>Scheme::Sftp =&gt; <span class="self">Self</span>::from_map::&lt;services::Sftp&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-sled&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-sled"</span>)]
             </span>Scheme::Sled =&gt; <span class="self">Self</span>::from_map::&lt;services::Sled&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-supabase&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-sqlite"</span>)]
+            </span>Scheme::Sqlite =&gt; <span class="self">Self</span>::from_map::&lt;services::Sqlite&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-supabase"</span>)]
             </span>Scheme::Supabase =&gt; <span class="self">Self</span>::from_map::&lt;services::Supabase&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-vercel-artifacts&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-swift"</span>)]
+            </span>Scheme::Swift =&gt; <span class="self">Self</span>::from_map::&lt;services::Swift&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-tikv"</span>)]
+            </span>Scheme::Tikv =&gt; <span class="self">Self</span>::from_map::&lt;services::Tikv&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-vercel-artifacts"</span>)]
             </span>Scheme::VercelArtifacts =&gt; <span class="self">Self</span>::from_map::&lt;services::VercelArtifacts&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-wasabi&quot;</span>)]
-            </span>Scheme::Wasabi =&gt; <span class="self">Self</span>::from_map::&lt;services::Wasabi&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-webdav&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-webdav"</span>)]
             </span>Scheme::Webdav =&gt; <span class="self">Self</span>::from_map::&lt;services::Webdav&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-webhdfs&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-webhdfs"</span>)]
             </span>Scheme::Webhdfs =&gt; <span class="self">Self</span>::from_map::&lt;services::Webhdfs&gt;(map)<span class="question-mark">?</span>.finish(),
-            <span class="attr">#[cfg(feature = <span class="string">&quot;services-redb&quot;</span>)]
+            <span class="attr">#[cfg(feature = <span class="string">"services-redb"</span>)]
             </span>Scheme::Redb =&gt; <span class="self">Self</span>::from_map::&lt;services::Redb&gt;(map)<span class="question-mark">?</span>.finish(),
+            <span class="attr">#[cfg(feature = <span class="string">"services-mongodb"</span>)]
+            </span>Scheme::Mongodb =&gt; <span class="self">Self</span>::from_map::&lt;services::Mongodb&gt;(map)<span class="question-mark">?</span>.finish(),
             v =&gt; {
                 <span class="kw">return </span><span class="prelude-val">Err</span>(Error::new(
                     ErrorKind::Unsupported,
-                    <span class="string">&quot;scheme is not enabled or supported&quot;</span>,
+                    <span class="string">"scheme is not enabled or supported"</span>,
                 )
-                .with_context(<span class="string">&quot;scheme&quot;</span>, v))
+                .with_context(<span class="string">"scheme"</span>, v))
             }
         };
 
@@ -623,7 +697,7 @@
     /// bit runtime overhead with an extra vtable lookup and unable to
     /// inline.
     ///
-    /// It&#39;s always recommended to use `OperatorBuilder::layer()` instead.
+    /// It's always recommended to use `OperatorBuilder::layer()` instead.
     ///
     /// # Examples
     ///
@@ -639,7 +713,7 @@
     /// let op = Operator::new(Fs::default())?.finish();
     /// let op = op.layer(LoggingLayer::default());
     /// // All operations will go through the new_layer
-    /// let _ = op.read(&quot;test_file&quot;).await?;
+    /// let _ = op.read("test_file").await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -659,7 +733,7 @@
 /// dispatch at the outmost type erase layer. OperatorBuilder is the only
 /// public API provided by OpenDAL come with generic parameters.
 ///
-/// It&#39;s required to call `finish` after the operator built.
+/// It's required to call `finish` after the operator built.
 ///
 /// # Examples
 ///
@@ -718,7 +792,7 @@
     /// bit runtime overhead with an extra vtable lookup and unable to
     /// inline.
     ///
-    /// It&#39;s always recommended to use `OperatorBuilder::layer()` instead.
+    /// It's always recommended to use `OperatorBuilder::layer()` instead.
     ///
     /// # Examples
     ///
@@ -735,7 +809,7 @@
     ///     .layer(LoggingLayer::default())
     ///     .finish();
     /// // All operations will go through the new_layer
-    /// let _ = op.read(&quot;test_file&quot;).await?;
+    /// let _ = op.read("test_file").await?;
     /// # Ok(())
     /// # }
     /// ```
