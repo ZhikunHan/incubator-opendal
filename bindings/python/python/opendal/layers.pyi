@@ -15,11 +15,12 @@
 # specific language governing permissions and limitations
 # under the License.
 
-from typing import Optional
+from typing import Optional, final
 
 class Layer:
     pass
 
+@final
 class RetryLayer(Layer):
     def __init__(
         self,
@@ -29,3 +30,7 @@ class RetryLayer(Layer):
         max_delay: Optional[float] = None,
         min_delay: Optional[float] = None,
     ) -> None: ...
+
+@final
+class ConcurrentLimitLayer(Layer):
+    def __init__(self, limit: int) -> None: ...

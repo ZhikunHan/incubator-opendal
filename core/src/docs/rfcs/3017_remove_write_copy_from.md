@@ -1,7 +1,7 @@
 - Proposal Name: `remove_write_copy_from`
 - Start Date: 2023-09-06
-- RFC PR: [apache/incubator-opendal#3017](https://github.com/apache/incubator-opendal/pull/3017)
-- Tracking Issue: [apache/incubator-opendal#3017](https://github.com/apache/incubator-opendal/issues/3017)
+- RFC PR: [apache/opendal#3017](https://github.com/apache/opendal/pull/3017)
+- Tracking Issue: [apache/opendal#3017](https://github.com/apache/opendal/issues/3017)
 
 # Summary
 
@@ -12,7 +12,6 @@ Remove the `oio::Write::copy_from()` API pending a more thoughtful design.
 In [RFC-2083: Writer Sink API](./2083_writer_sink_api.md), we launched an API, initially named `sink` and changed to `copy_from`, that enables data writing from a `Reader` to a `Writer` object.
 
 The current API signature is:
-
 ```rust
 pub trait Write: Unpin + Send + Sync {
     /// Copies data from the given reader to the writer.

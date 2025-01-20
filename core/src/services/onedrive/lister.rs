@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use async_trait::async_trait;
+use bytes::Buf;
 
 use super::backend::OnedriveBackend;
 use super::error::parse_error;
@@ -43,7 +43,6 @@ impl OnedriveLister {
     }
 }
 
-#[async_trait]
 impl oio::PageList for OnedriveLister {
     async fn next_page(&self, ctx: &mut oio::PageContext) -> Result<()> {
         let request_url = if ctx.token.is_empty() {
@@ -75,13 +74,13 @@ impl oio::PageList for OnedriveLister {
                 ctx.done = true;
                 return Ok(());
             }
-            let error = parse_error(resp).await?;
+            let error = parse_error(resp);
             return Err(error);
         }
 
-        let bytes = resp.into_body().bytes().await?;
-        let decoded_response = serde_json::from_slice::<GraphApiOnedriveListResponse>(&bytes)
-            .map_err(new_json_deserialize_error)?;
+        let bytes = resp.into_body();
+        let decoded_response: GraphApiOnedriveListResponse =
+            serde_json::from_reader(bytes.reader()).map_err(new_json_deserialize_error)?;
 
         if let Some(next_link) = decoded_response.next_link {
             ctx.token = next_link;

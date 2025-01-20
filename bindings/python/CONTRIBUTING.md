@@ -17,11 +17,11 @@ For small or first-time contributions, we recommend the dev container method. Pr
 
 ### Using a dev container environment
 
-OpenDAL provides a pre-configured [dev container](https://containers.dev/) that could be used in [GitHub Codespaces](https://github.com/features/codespaces), [VSCode](https://code.visualstudio.com/), [JetBrains](https://www.jetbrains.com/remote-development/gateway/), [JuptyerLab](https://jupyterlab.readthedocs.io/en/stable/). Please pick up your favourite runtime environment.
+OpenDAL provides a pre-configured [dev container](https://containers.dev/) that could be used in [GitHub Codespaces](https://github.com/features/codespaces), [VSCode](https://code.visualstudio.com/), [JetBrains](https://www.jetbrains.com/remote-development/gateway/), [JupyterLab](https://jupyterlab.readthedocs.io/en/stable/). Please pick up your favourite runtime environment.
 
 The fastest way is:
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/apache/incubator-opendal?quickstart=1&machine=standardLinux32gb)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/apache/opendal?quickstart=1&machine=standardLinux32gb)
 
 ### Bring your own toolbox
 
@@ -46,7 +46,7 @@ After `venv` has been prepared, you can activate it by `source venv/bin/activate
 To simplify our work, we will utilize the tool [`maturin`](https://github.com/PyO3/maturin). Kindly install it beforehand.
 
 ```shell
-pip install maturin[patchelf]
+pip install 'maturin[patchelf]'
 ```
 
 ## Build

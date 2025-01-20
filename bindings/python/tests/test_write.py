@@ -29,7 +29,7 @@ def test_sync_write(service_name, operator, async_operator):
     filename = f"test_file_{str(uuid4())}.txt"
     content = os.urandom(size)
     size = len(content)
-    operator.write(filename, content)
+    operator.write(filename, content, content_type="text/plain")
     metadata = operator.stat(filename)
     assert metadata is not None
     assert metadata.mode.is_file()
@@ -99,4 +99,33 @@ async def test_async_delete(service_name, operator, async_operator):
     await async_operator.write(filename, content)
     await async_operator.delete(filename)
     with pytest.raises(NotFound):
-        await operator.stat(filename)
+        await async_operator.stat(filename)
+
+
+@pytest.mark.asyncio
+@pytest.mark.need_capability("write", "delete")
+async def test_async_writer(service_name, operator, async_operator):
+    size = randint(1, 1024)
+    filename = f"test_file_{str(uuid4())}.txt"
+    content = os.urandom(size)
+    f = await async_operator.open(filename, "wb")
+    written_bytes = await f.write(content)
+    assert written_bytes == size
+    await f.close()
+    await async_operator.delete(filename)
+    with pytest.raises(NotFound):
+        await async_operator.stat(filename)
+
+
+@pytest.mark.need_capability("write", "delete")
+def test_sync_writer(service_name, operator, async_operator):
+    size = randint(1, 1024)
+    filename = f"test_file_{str(uuid4())}.txt"
+    content = os.urandom(size)
+    f = operator.open(filename, "wb")
+    written_bytes = f.write(content)
+    assert written_bytes == size
+    f.close()
+    operator.delete(filename)
+    with pytest.raises(NotFound):
+        operator.stat(filename)

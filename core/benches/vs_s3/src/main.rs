@@ -42,12 +42,12 @@ fn main() {
     let region = env::var("OPENDAL_S3_REGION").unwrap();
 
     // Init OpenDAL Operator.
-    let mut cfg = services::S3::default();
-    cfg.endpoint(&endpoint);
-    cfg.access_key_id(&access_key);
-    cfg.secret_access_key(&secret_key);
-    cfg.bucket(&bucket);
-    cfg.region(&region);
+    let cfg = services::S3::default()
+        .endpoint(&endpoint)
+        .access_key_id(&access_key)
+        .secret_access_key(&secret_key)
+        .bucket(&bucket)
+        .region(&region);
     let op = Operator::new(cfg).unwrap().finish();
 
     // Init AWS S3 SDK.
@@ -69,13 +69,12 @@ fn bench_read(c: &mut Criterion, op: Operator, s3_client: aws_sdk_s3::Client, bu
     let mut group = c.benchmark_group("read");
     group.throughput(criterion::Throughput::Bytes(16 * 1024 * 1024));
 
-    TEST_RUNTIME.block_on(prepare(op.clone()));
+    TEST_RUNTIME.block_on(prepare(&op));
 
     group.bench_function("opendal_s3_reader", |b| {
         b.to_async(&*TEST_RUNTIME).iter(|| async {
-            let mut r = op.reader("file").await.unwrap();
-            let mut bs = Vec::new();
-            let _ = r.read_to_end(&mut bs).await.unwrap();
+            let r = op.reader("file").await.unwrap();
+            let _ = r.read(..).await.unwrap();
         });
     });
     group.bench_function("aws_s3_sdk_into_async_read", |b| {
@@ -96,9 +95,8 @@ fn bench_read(c: &mut Criterion, op: Operator, s3_client: aws_sdk_s3::Client, bu
 
     group.bench_function("opendal_s3_reader_with_capacity", |b| {
         b.to_async(&*TEST_RUNTIME).iter(|| async {
-            let mut r = op.reader("file").await.unwrap();
-            let mut bs = Vec::with_capacity(16 * 1024 * 1024);
-            let _ = r.read_to_end(&mut bs).await.unwrap();
+            let r = op.reader("file").await.unwrap();
+            let _ = r.read(..16 * 1024 * 1024).await.unwrap();
         });
     });
     group.bench_function("aws_s3_sdk_into_async_read_with_capacity", |b| {
@@ -120,10 +118,10 @@ fn bench_read(c: &mut Criterion, op: Operator, s3_client: aws_sdk_s3::Client, bu
     group.finish()
 }
 
-async fn prepare(op: Operator) {
+async fn prepare(op: &Operator) {
     let mut rng = thread_rng();
     let mut content = vec![0; 16 * 1024 * 1024];
     rng.fill_bytes(&mut content);
 
-    op.write("file", content.clone()).await.unwrap();
+    op.write("file", content).await.unwrap();
 }

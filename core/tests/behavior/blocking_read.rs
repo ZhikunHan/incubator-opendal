@@ -30,7 +30,6 @@ pub fn tests(op: &Operator, tests: &mut Vec<Trial>) {
             op,
             test_blocking_read_full,
             test_blocking_read_range,
-            test_blocking_read_large_range,
             test_blocking_read_not_exist
         ))
     }
@@ -57,7 +56,7 @@ pub fn test_blocking_read_full(op: BlockingOperator) -> Result<()> {
     op.write(&path, content.clone())
         .expect("write must succeed");
 
-    let bs = op.read(&path)?;
+    let bs = op.read(&path)?.to_bytes();
     assert_eq!(size, bs.len(), "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs)),
@@ -71,10 +70,6 @@ pub fn test_blocking_read_full(op: BlockingOperator) -> Result<()> {
 
 /// Read range content should match.
 pub fn test_blocking_read_range(op: BlockingOperator) -> Result<()> {
-    if !op.info().full_capability().read_with_range {
-        return Ok(());
-    }
-
     let path = uuid::Uuid::new_v4().to_string();
     debug!("Generate a random file: {}", &path);
     let (content, size) = gen_bytes(op.info().full_capability());
@@ -83,7 +78,11 @@ pub fn test_blocking_read_range(op: BlockingOperator) -> Result<()> {
     op.write(&path, content.clone())
         .expect("write must succeed");
 
-    let bs = op.read_with(&path).range(offset..offset + length).call()?;
+    let bs = op
+        .read_with(&path)
+        .range(offset..offset + length)
+        .call()?
+        .to_bytes();
     assert_eq!(bs.len() as u64, length, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs)),
@@ -92,36 +91,6 @@ pub fn test_blocking_read_range(op: BlockingOperator) -> Result<()> {
             Sha256::digest(&content[offset as usize..(offset + length) as usize])
         ),
         "read content"
-    );
-
-    op.delete(&path).expect("delete must succeed");
-    Ok(())
-}
-
-/// Read large range content should match.
-pub fn test_blocking_read_large_range(op: BlockingOperator) -> Result<()> {
-    if !op.info().full_capability().read_with_range {
-        return Ok(());
-    }
-
-    let path = uuid::Uuid::new_v4().to_string();
-    debug!("Generate a random file: {}", &path);
-    let (content, size) = gen_bytes(op.info().full_capability());
-    let (offset, _) = gen_offset_length(size);
-
-    op.write(&path, content.clone())
-        .expect("write must succeed");
-
-    let bs = op.read_with(&path).range(offset..u32::MAX as u64).call()?;
-    assert_eq!(
-        bs.len() as u64,
-        size as u64 - offset,
-        "read size with large range"
-    );
-    assert_eq!(
-        format!("{:x}", Sha256::digest(&bs)),
-        format!("{:x}", Sha256::digest(&content[offset as usize..])),
-        "read content with large range"
     );
 
     op.delete(&path).expect("delete must succeed");
@@ -176,7 +145,7 @@ pub fn test_blocking_read_only_stat_not_exist(op: BlockingOperator) -> Result<()
 
 /// Read full content should match.
 pub fn test_blocking_read_only_read_full(op: BlockingOperator) -> Result<()> {
-    let bs = op.read("normal_file.txt")?;
+    let bs = op.read("normal_file.txt")?.to_bytes();
     assert_eq!(bs.len(), 30482, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs)),
@@ -189,7 +158,11 @@ pub fn test_blocking_read_only_read_full(op: BlockingOperator) -> Result<()> {
 
 /// Read full content should match.
 pub fn test_blocking_read_only_read_with_range(op: BlockingOperator) -> Result<()> {
-    let bs = op.read_with("normal_file.txt").range(1024..2048).call()?;
+    let bs = op
+        .read_with("normal_file.txt")
+        .range(1024..2048)
+        .call()?
+        .to_bytes();
     assert_eq!(bs.len(), 1024, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs)),

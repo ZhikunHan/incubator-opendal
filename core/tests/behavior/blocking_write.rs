@@ -76,9 +76,9 @@ pub fn test_blocking_write_with_dir_path(op: BlockingOperator) -> Result<()> {
 
 /// Write a single file with special chars should succeed.
 pub fn test_blocking_write_with_special_chars(op: BlockingOperator) -> Result<()> {
-    // Ignore test for supabase until https://github.com/apache/incubator-opendal/issues/2194 addressed.
+    // Ignore test for supabase until https://github.com/apache/opendal/issues/2194 addressed.
     if op.info().scheme() == opendal::Scheme::Supabase {
-        warn!("ignore test for supabase until https://github.com/apache/incubator-opendal/issues/2194 is resolved");
+        warn!("ignore test for supabase until https://github.com/apache/opendal/issues/2194 is resolved");
         return Ok(());
     }
     // Ignore test for atomicserver until https://github.com/atomicdata-dev/atomic-server/issues/663 addressed.
@@ -116,7 +116,7 @@ pub fn test_blocking_write_with_append(op: BlockingOperator) -> Result<()> {
         .call()
         .expect("append to an existing file must success");
 
-    let bs = op.read(&path).expect("read file must success");
+    let bs = op.read(&path).expect("read file must success").to_bytes();
 
     assert_eq!(bs.len(), size_one + size_two);
     assert_eq!(bs[..size_one], content_one);
@@ -133,7 +133,7 @@ pub fn test_blocking_writer_with_append(op: BlockingOperator) -> Result<()> {
     let (content, size): (Vec<u8>, usize) =
         gen_bytes_with_range(10 * 1024 * 1024..20 * 1024 * 1024);
 
-    let mut a = op.writer_with(&path).append(true).call()?;
+    let mut a = op.writer_with(&path).append(true).call()?.into_std_write();
 
     // Wrap a buf reader here to make sure content is read in 1MiB chunks.
     let mut cursor = BufReader::with_capacity(1024 * 1024, Cursor::new(content.clone()));
@@ -143,7 +143,7 @@ pub fn test_blocking_writer_with_append(op: BlockingOperator) -> Result<()> {
     let meta = op.stat(&path).expect("stat must succeed");
     assert_eq!(meta.content_length(), size as u64);
 
-    let bs = op.read(&path)?;
+    let bs = op.read(&path)?.to_bytes();
     assert_eq!(bs.len(), size, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),

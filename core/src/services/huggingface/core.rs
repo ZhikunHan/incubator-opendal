@@ -49,7 +49,7 @@ impl Debug for HuggingfaceCore {
 }
 
 impl HuggingfaceCore {
-    pub async fn hf_path_info(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn hf_path_info(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_end_matches('/')
             .to_string();
@@ -77,17 +77,13 @@ impl HuggingfaceCore {
         let req_body = format!("paths={}&expand=True", percent_encode_path(&p));
 
         let req = req
-            .body(AsyncBody::Bytes(Bytes::from(req_body)))
+            .body(Buffer::from(Bytes::from(req_body)))
             .map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }
 
-    pub async fn hf_list(
-        &self,
-        path: &str,
-        recursive: bool,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn hf_list(&self, path: &str, recursive: bool) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_end_matches('/')
             .to_string();
@@ -118,14 +114,17 @@ impl HuggingfaceCore {
             req = req.header(header::AUTHORIZATION, auth_header_content);
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }
 
-    pub async fn hf_resolve(&self, path: &str, arg: OpRead) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn hf_resolve(
+        &self,
+        path: &str,
+        range: BytesRange,
+        _args: &OpRead,
+    ) -> Result<Response<HttpBody>> {
         let p = build_abs_path(&self.root, path)
             .trim_end_matches('/')
             .to_string();
@@ -152,16 +151,13 @@ impl HuggingfaceCore {
             req = req.header(header::AUTHORIZATION, auth_header_content);
         }
 
-        let range = arg.range();
         if !range.is_full() {
-            req = req.header(header::RANGE, &range.to_header());
+            req = req.header(header::RANGE, range.to_header());
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.client.send(req).await
+        self.client.fetch(req).await
     }
 }
 
@@ -202,7 +198,6 @@ pub(super) struct HuggingfaceLastCommit {
 #[allow(dead_code)]
 pub(super) struct HuggingfaceSecurity {
     pub blob_id: String,
-    pub name: String,
     pub safe: bool,
     pub av_scan: Option<HuggingfaceAvScan>,
     pub pickle_import_scan: Option<HuggingfacePickleImportScan>,
@@ -367,7 +362,6 @@ mod tests {
             }),
             security: Some(HuggingfaceSecurity {
                 blob_id: "45fa7c3d85ee7dd4139adbc056da25ae136a65f2".to_string(),
-                name: "maelstrom/lib/maelstrom.jar".to_string(),
                 safe: true,
                 av_scan: Some(HuggingfaceAvScan {
                     virus_found: false,

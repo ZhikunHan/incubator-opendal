@@ -54,14 +54,16 @@ def setup_config(service_name):
         True if os.environ.get("OPENDAL_DISABLE_RANDOM_ROOT") == "true" else False
     )
     if not disable_random_root:
-        config["root"] = f"{config.get('root', '/')}{str(uuid4())}/"
+        config["root"] = f"{config.get('root', '/')}/{str(uuid4())}/"
     return config
 
 
 @pytest.fixture(scope="session")
 def async_operator(service_name, setup_config):
-    return opendal.AsyncOperator(service_name, **setup_config).layer(
-        opendal.layers.RetryLayer()
+    return (
+        opendal.AsyncOperator(service_name, **setup_config)
+        .layer(opendal.layers.RetryLayer())
+        .layer(opendal.layers.ConcurrentLimitLayer(1024))
     )
 
 

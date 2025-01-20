@@ -18,7 +18,7 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use http::header::RANGE;
+use bytes::Buf;
 use http::Request;
 use http::Response;
 use http::StatusCode;
@@ -117,7 +117,7 @@ impl AlluxioCore {
         req = req.header("Content-Type", "application/json");
 
         let req = req
-            .body(AsyncBody::Bytes(body))
+            .body(Buffer::from(body))
             .map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
@@ -125,7 +125,7 @@ impl AlluxioCore {
         let status = resp.status();
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -147,7 +147,7 @@ impl AlluxioCore {
         req = req.header("Content-Type", "application/json");
 
         let req = req
-            .body(AsyncBody::Bytes(body))
+            .body(Buffer::from(body))
             .map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
@@ -155,12 +155,12 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
+                let body = resp.into_body();
                 let steam_id: u64 =
-                    serde_json::from_slice(&body).map_err(new_json_serialize_error)?;
+                    serde_json::from_reader(body.reader()).map_err(new_json_serialize_error)?;
                 Ok(steam_id)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -172,21 +172,19 @@ impl AlluxioCore {
             self.endpoint,
             percent_encode_path(&path)
         ));
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         let resp = self.client.send(req).await?;
 
         let status = resp.status();
 
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
+                let body = resp.into_body();
                 let steam_id: u64 =
-                    serde_json::from_slice(&body).map_err(new_json_serialize_error)?;
+                    serde_json::from_reader(body.reader()).map_err(new_json_serialize_error)?;
                 Ok(steam_id)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -198,9 +196,7 @@ impl AlluxioCore {
             self.endpoint,
             percent_encode_path(&path)
         ));
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         let resp = self.client.send(req).await?;
 
         let status = resp.status();
@@ -208,7 +204,7 @@ impl AlluxioCore {
         match status {
             StatusCode::OK => Ok(()),
             _ => {
-                let err = parse_error(resp).await?;
+                let err = parse_error(resp);
                 if err.kind() == ErrorKind::NotFound {
                     return Ok(());
                 }
@@ -228,9 +224,7 @@ impl AlluxioCore {
             percent_encode_path(&dst)
         ));
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
 
@@ -238,7 +232,7 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -251,9 +245,7 @@ impl AlluxioCore {
             percent_encode_path(&path)
         ));
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
 
@@ -261,12 +253,12 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
+                let body = resp.into_body();
                 let file_info: FileInfo =
-                    serde_json::from_slice(&body).map_err(new_json_serialize_error)?;
+                    serde_json::from_reader(body.reader()).map_err(new_json_serialize_error)?;
                 Ok(file_info)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -279,9 +271,7 @@ impl AlluxioCore {
             percent_encode_path(&path)
         ));
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
 
@@ -289,45 +279,30 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
+                let body = resp.into_body();
                 let file_infos: Vec<FileInfo> =
-                    serde_json::from_slice(&body).map_err(new_json_deserialize_error)?;
+                    serde_json::from_reader(body.reader()).map_err(new_json_deserialize_error)?;
                 Ok(file_infos)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    pub async fn read(
-        &self,
-        stream_id: u64,
-        range: BytesRange,
-    ) -> Result<Response<IncomingAsyncBody>> {
-        let mut req = Request::post(format!(
+    /// TODO: we should implement range support correctly.
+    ///
+    /// Please refer to [alluxio-py](https://github.com/Alluxio/alluxio-py/blob/main/alluxio/const.py#L18)
+    pub async fn read(&self, stream_id: u64, _: BytesRange) -> Result<Response<HttpBody>> {
+        let req = Request::post(format!(
             "{}/api/v1/streams/{}/read",
-            self.endpoint, stream_id
+            self.endpoint, stream_id,
         ));
 
-        if !range.is_full() {
-            // alluxio doesn't support read with suffix range.
-            if range.offset().is_none() && range.size().is_some() {
-                return Err(Error::new(
-                    ErrorKind::Unsupported,
-                    "azblob doesn't support read with suffix range",
-                ));
-            }
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-            req = req.header(RANGE, range.to_header());
-        }
-
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
-
-        self.client.send(req).await
+        self.client.fetch(req).await
     }
 
-    pub(super) async fn write(&self, stream_id: u64, body: AsyncBody) -> Result<usize> {
+    pub(super) async fn write(&self, stream_id: u64, body: Buffer) -> Result<usize> {
         let req = Request::post(format!(
             "{}/api/v1/streams/{}/write",
             self.endpoint, stream_id
@@ -340,12 +315,12 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
+                let body = resp.into_body();
                 let size: usize =
-                    serde_json::from_slice(&body).map_err(new_json_serialize_error)?;
+                    serde_json::from_reader(body.reader()).map_err(new_json_serialize_error)?;
                 Ok(size)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -354,9 +329,7 @@ impl AlluxioCore {
             "{}/api/v1/streams/{}/close",
             self.endpoint, stream_id
         ));
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         let resp = self.client.send(req).await?;
 
@@ -364,7 +337,7 @@ impl AlluxioCore {
 
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 }

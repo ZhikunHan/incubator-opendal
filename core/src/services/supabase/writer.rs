@@ -17,12 +17,10 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use http::StatusCode;
 
 use super::core::*;
 use super::error::parse_error;
-use crate::raw::oio::WriteBuf;
 use crate::raw::*;
 use crate::*;
 
@@ -43,16 +41,13 @@ impl SupabaseWriter {
     }
 }
 
-#[async_trait]
 impl oio::OneShotWrite for SupabaseWriter {
-    async fn write_once(&self, bs: &dyn WriteBuf) -> Result<()> {
-        let bs = oio::ChunkedBytes::from_vec(bs.vectored_bytes(bs.remaining()));
-
+    async fn write_once(&self, bs: Buffer) -> Result<()> {
         let mut req = self.core.supabase_upload_object_request(
             &self.path,
             Some(bs.len()),
             self.op.content_type(),
-            AsyncBody::ChunkedBytes(bs),
+            bs,
         )?;
 
         self.core.sign(&mut req)?;
@@ -60,11 +55,8 @@ impl oio::OneShotWrite for SupabaseWriter {
         let resp = self.core.send(req).await?;
 
         match resp.status() {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(()),
+            _ => Err(parse_error(resp)),
         }
     }
 }

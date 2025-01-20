@@ -59,8 +59,6 @@ pub struct UpyunCore {
     pub root: String,
     /// The endpoint of this backend.
     pub operator: String,
-    /// The password id of this backend.
-    pub password: String,
     /// The bucket of this backend.
     pub bucket: String,
 
@@ -82,11 +80,11 @@ impl Debug for UpyunCore {
 
 impl UpyunCore {
     #[inline]
-    pub async fn send(&self, req: Request<AsyncBody>) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn send(&self, req: Request<Buffer>) -> Result<Response<Buffer>> {
         self.client.send(req).await
     }
 
-    pub async fn sign(&self, req: &mut Request<AsyncBody>) -> Result<()> {
+    pub fn sign(&self, req: &mut Request<Buffer>) -> Result<()> {
         // get rfc1123 date
         let date = chrono::Utc::now()
             .format("%a, %d %b %Y %H:%M:%S GMT")
@@ -104,7 +102,7 @@ impl UpyunCore {
 }
 
 impl UpyunCore {
-    pub async fn download_file(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn download_file(&self, path: &str, range: BytesRange) -> Result<Response<HttpBody>> {
         let path = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -116,15 +114,16 @@ impl UpyunCore {
         let req = Request::get(url);
 
         let mut req = req
-            .body(AsyncBody::Empty)
+            .header(header::RANGE, range.to_header())
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
-        self.send(req).await
+        self.client.fetch(req).await
     }
 
-    pub async fn info(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn info(&self, path: &str) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -135,22 +134,20 @@ impl UpyunCore {
 
         let req = Request::head(url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
 
-    pub async fn upload(
+    pub fn upload(
         &self,
         path: &str,
         size: Option<u64>,
         args: &OpWrite,
-        body: AsyncBody,
-    ) -> Result<Request<AsyncBody>> {
+        body: Buffer,
+    ) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -180,12 +177,12 @@ impl UpyunCore {
         // Set body
         let mut req = req.body(body).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         Ok(req)
     }
 
-    pub async fn delete(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn delete(&self, path: &str) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -196,16 +193,14 @@ impl UpyunCore {
 
         let req = Request::delete(url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
 
-    pub async fn copy(&self, from: &str, to: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn copy(&self, from: &str, to: &str) -> Result<Response<Buffer>> {
         let from = format!("/{}/{}", self.bucket, build_abs_path(&self.root, from));
         let to = build_abs_path(&self.root, to);
 
@@ -224,16 +219,14 @@ impl UpyunCore {
         req = req.header(X_UPYUN_METADATA_DIRECTIVE, "copy");
 
         // Set body
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
 
-    pub async fn move_object(&self, from: &str, to: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn move_object(&self, from: &str, to: &str) -> Result<Response<Buffer>> {
         let from = format!("/{}/{}", self.bucket, build_abs_path(&self.root, from));
         let to = build_abs_path(&self.root, to);
 
@@ -252,16 +245,14 @@ impl UpyunCore {
         req = req.header(X_UPYUN_METADATA_DIRECTIVE, "copy");
 
         // Set body
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
 
-    pub async fn create_dir(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn create_dir(&self, path: &str) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
         let path = path[..path.len() - 1].to_string();
 
@@ -277,11 +268,9 @@ impl UpyunCore {
 
         req = req.header(X_UPYUN_FOLDER, "true");
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
@@ -290,7 +279,7 @@ impl UpyunCore {
         &self,
         path: &str,
         args: &OpWrite,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -317,23 +306,21 @@ impl UpyunCore {
             req = req.header(X_UPYUN_CACHE_CONTROL, cache_control)
         }
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
 
-    pub async fn upload_part(
+    pub fn upload_part(
         &self,
         path: &str,
         upload_id: &str,
         part_number: usize,
         size: u64,
-        body: AsyncBody,
-    ) -> Result<Request<AsyncBody>> {
+        body: Buffer,
+    ) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -355,7 +342,7 @@ impl UpyunCore {
         // Set body
         let mut req = req.body(body).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         Ok(req)
     }
@@ -364,7 +351,7 @@ impl UpyunCore {
         &self,
         path: &str,
         upload_id: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -379,11 +366,9 @@ impl UpyunCore {
 
         req = req.header(X_UPYUN_MULTI_UUID, upload_id);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }
@@ -393,7 +378,7 @@ impl UpyunCore {
         path: &str,
         iter: &str,
         limit: Option<usize>,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -418,11 +403,9 @@ impl UpyunCore {
         }
 
         // Set body
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.sign(&mut req).await?;
+        self.sign(&mut req)?;
 
         self.send(req).await
     }

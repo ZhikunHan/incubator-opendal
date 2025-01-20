@@ -10,13 +10,12 @@ This service can be used to:
 - [x] copy
 - [ ] rename
 - [ ] list
-- [ ] scan
 - [ ] presign
 - [ ] blocking
 
 ## Notes
 
-This service is mainly provided by github actions.
+This service is mainly provided by GitHub actions.
 
 Refer to [Caching dependencies to speed up workflows](https://docs.github.com/en/actions/using-workflows/caching-dependencies-to-speed-up-workflows) for more information.
 
@@ -72,11 +71,11 @@ use opendal::Operator;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Create ghac backend builder.
-    let mut builder = Ghac::default();
-    // Set the root for ghac, all operations will happen under this root.
-    //
-    // NOTE: the root must be absolute path.
-    builder.root("/path/to/dir");
+    let mut builder = Ghac::default()
+        // Set the root for ghac, all operations will happen under this root.
+        //
+        // NOTE: the root must be absolute path.
+        .root("/path/to/dir");
 
     let op: Operator = Operator::new(builder)?.finish();
 

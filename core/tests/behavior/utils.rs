@@ -17,12 +17,12 @@
 
 use std::mem;
 use std::sync::Mutex;
-use std::usize;
 
 use futures::Future;
 use libtest_mimic::Failed;
 use libtest_mimic::Trial;
 use opendal::raw::tests::TEST_RUNTIME;
+use opendal::raw::*;
 use opendal::*;
 use rand::distributions::uniform::SampleRange;
 use rand::prelude::*;
@@ -61,7 +61,7 @@ pub fn gen_offset_length(size: usize) -> (u64, u64) {
 /// Build a new async trail as a test case.
 pub fn build_async_trial<F, Fut>(name: &str, op: &Operator, f: F) -> Trial
 where
-    F: FnOnce(Operator) -> Fut + Send + 'static,
+    F: FnOnce(Operator) -> Fut + MaybeSend + 'static,
     Fut: Future<Output = anyhow::Result<()>>,
 {
     let handle = TEST_RUNTIME.handle().clone();
@@ -86,7 +86,7 @@ macro_rules! async_trials {
 /// Build a new async trail as a test case.
 pub fn build_blocking_trial<F>(name: &str, op: &Operator, f: F) -> Trial
 where
-    F: FnOnce(BlockingOperator) -> anyhow::Result<()> + Send + 'static,
+    F: FnOnce(BlockingOperator) -> anyhow::Result<()> + MaybeSend + 'static,
 {
     let op = op.blocking();
 
@@ -106,6 +106,12 @@ macro_rules! blocking_trials {
 
 pub struct Fixture {
     pub paths: Mutex<Vec<String>>,
+}
+
+impl Default for Fixture {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Fixture {
@@ -181,12 +187,12 @@ impl Fixture {
     pub async fn cleanup(&self, op: impl Into<Operator>) {
         let op = op.into();
         let paths: Vec<_> = mem::take(self.paths.lock().unwrap().as_mut());
-        for path in paths.iter() {
-            // We try our best to cleanup fixtures, but won't panic if failed.
-            let _ = op.delete(path).await.map_err(|err| {
-                log::error!("fixture cleanup path {path} failed: {:?}", err);
-            });
-            log::info!("fixture cleanup path {path} succeeded")
+        // Don't call delete if paths is empty
+        if paths.is_empty() {
+            return;
         }
+
+        // We try our best to clean up fixtures, but won't panic if failed.
+        let _ = op.delete_iter(paths).await;
     }
 }

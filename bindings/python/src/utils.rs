@@ -19,6 +19,7 @@ use std::os::raw::c_int;
 
 use pyo3::ffi;
 use pyo3::prelude::*;
+use pyo3::IntoPyObjectExt;
 
 /// A bytes-like object that implements buffer protocol.
 #[pyclass(module = "opendal")]
@@ -31,20 +32,18 @@ impl Buffer {
         Buffer { inner }
     }
 
-    /// Consume self to build a memory view
-    pub fn into_memory_view(self, py: Python) -> PyResult<Py<PyAny>> {
-        let buffer = self.into_py(py);
+    /// Consume self to build a bytes
+    pub fn into_bytes(self, py: Python) -> PyResult<Py<PyAny>> {
+        let buffer = self.into_py_any(py)?;
 
-        unsafe {
-            PyObject::from_owned_ptr_or_err(py, ffi::PyMemoryView_FromObject(buffer.as_ptr()))
-        }
+        unsafe { PyObject::from_owned_ptr_or_err(py, ffi::PyBytes_FromObject(buffer.as_ptr())) }
     }
 
-    /// Consume self to build a memory view ref.
-    pub fn into_memory_view_ref(self, py: Python) -> PyResult<&PyAny> {
-        let buffer = self.into_py(py);
+    /// Consume self to build a bytes
+    pub fn into_bytes_ref(self, py: Python) -> PyResult<Bound<PyAny>> {
+        let buffer = self.into_py_any(py)?;
         let view =
-            unsafe { py.from_owned_ptr_or_err(ffi::PyMemoryView_FromObject(buffer.as_ptr()))? };
+            unsafe { Bound::from_owned_ptr_or_err(py, ffi::PyBytes_FromObject(buffer.as_ptr()))? };
 
         Ok(view)
     }
