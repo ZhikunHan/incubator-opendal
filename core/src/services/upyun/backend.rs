@@ -15,52 +15,31 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use async_trait::async_trait;
+use http::Response;
 use http::StatusCode;
 use log::debug;
-use serde::Deserialize;
 
-use super::core::parse_info;
-use super::core::UpyunCore;
+use super::core::*;
+use super::delete::UpyunDeleter;
 use super::error::parse_error;
 use super::lister::UpyunLister;
 use super::writer::UpyunWriter;
 use super::writer::UpyunWriters;
 use crate::raw::*;
-use crate::services::upyun::core::UpyunSigner;
+use crate::services::UpyunConfig;
 use crate::*;
 
-/// Config for backblaze upyun services support.
-#[derive(Default, Deserialize)]
-#[serde(default)]
-#[non_exhaustive]
-pub struct UpyunConfig {
-    /// root of this backend.
-    ///
-    /// All operations will happen under this root.
-    pub root: Option<String>,
-    /// bucket address of this backend.
-    pub bucket: String,
-    /// username of this backend.
-    pub operator: Option<String>,
-    /// password of this backend.
-    pub password: Option<String>,
-}
-
-impl Debug for UpyunConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("Config");
-
-        ds.field("root", &self.root);
-        ds.field("bucket", &self.bucket);
-        ds.field("operator", &self.operator);
-
-        ds.finish()
+impl Configurator for UpyunConfig {
+    type Builder = UpyunBuilder;
+    fn into_builder(self) -> Self::Builder {
+        UpyunBuilder {
+            config: self,
+            http_client: None,
+        }
     }
 }
 
@@ -86,7 +65,7 @@ impl UpyunBuilder {
     /// Set root of this backend.
     ///
     /// All operations will happen under this root.
-    pub fn root(&mut self, root: &str) -> &mut Self {
+    pub fn root(mut self, root: &str) -> Self {
         self.config.root = if root.is_empty() {
             None
         } else {
@@ -99,7 +78,7 @@ impl UpyunBuilder {
     /// bucket of this backend.
     ///
     /// It is required. e.g. `test`
-    pub fn bucket(&mut self, bucket: &str) -> &mut Self {
+    pub fn bucket(mut self, bucket: &str) -> Self {
         self.config.bucket = bucket.to_string();
 
         self
@@ -108,7 +87,7 @@ impl UpyunBuilder {
     /// operator of this backend.
     ///
     /// It is required. e.g. `test`
-    pub fn operator(&mut self, operator: &str) -> &mut Self {
+    pub fn operator(mut self, operator: &str) -> Self {
         self.config.operator = if operator.is_empty() {
             None
         } else {
@@ -121,7 +100,7 @@ impl UpyunBuilder {
     /// password of this backend.
     ///
     /// It is required. e.g. `asecret`
-    pub fn password(&mut self, password: &str) -> &mut Self {
+    pub fn password(mut self, password: &str) -> Self {
         self.config.password = if password.is_empty() {
             None
         } else {
@@ -137,7 +116,7 @@ impl UpyunBuilder {
     ///
     /// This API is part of OpenDAL's Raw API. `HttpClient` could be changed
     /// during minor updates.
-    pub fn http_client(&mut self, client: HttpClient) -> &mut Self {
+    pub fn http_client(mut self, client: HttpClient) -> Self {
         self.http_client = Some(client);
         self
     }
@@ -145,31 +124,10 @@ impl UpyunBuilder {
 
 impl Builder for UpyunBuilder {
     const SCHEME: Scheme = Scheme::Upyun;
-    type Accessor = UpyunBackend;
-
-    /// Converts a HashMap into an UpyunBuilder instance.
-    ///
-    /// # Arguments
-    ///
-    /// * `map` - A HashMap containing the configuration values.
-    ///
-    /// # Returns
-    ///
-    /// Returns an instance of UpyunBuilder.
-    fn from_map(map: HashMap<String, String>) -> Self {
-        // Deserialize the configuration from the HashMap.
-        let config = UpyunConfig::deserialize(ConfigDeserializer::new(map))
-            .expect("config deserialize must succeed");
-
-        // Create an UpyunBuilder instance with the deserialized config.
-        UpyunBuilder {
-            config,
-            http_client: None,
-        }
-    }
+    type Config = UpyunConfig;
 
     /// Builds the backend and returns the result of UpyunBackend.
-    fn build(&mut self) -> Result<Self::Accessor> {
+    fn build(self) -> Result<impl Access> {
         debug!("backend build started: {:?}", &self);
 
         let root = normalize_root(&self.config.root.clone().unwrap_or_default());
@@ -198,7 +156,7 @@ impl Builder for UpyunBuilder {
                 .with_context("service", Scheme::Upyun)),
         }?;
 
-        let client = if let Some(client) = self.http_client.take() {
+        let client = if let Some(client) = self.http_client {
             client
         } else {
             HttpClient::new().map_err(|err| {
@@ -214,9 +172,51 @@ impl Builder for UpyunBuilder {
 
         Ok(UpyunBackend {
             core: Arc::new(UpyunCore {
+                info: {
+                    let am = AccessorInfo::default();
+                    am.set_scheme(Scheme::Upyun)
+                        .set_root(&root)
+                        .set_native_capability(Capability {
+                            stat: true,
+                            stat_has_content_length: true,
+                            stat_has_content_type: true,
+                            stat_has_content_md5: true,
+                            stat_has_cache_control: true,
+                            stat_has_content_disposition: true,
+
+                            create_dir: true,
+
+                            read: true,
+
+                            write: true,
+                            write_can_empty: true,
+                            write_can_multi: true,
+                            write_with_cache_control: true,
+                            write_with_content_type: true,
+
+                            // https://help.upyun.com/knowledge-base/rest_api/#e5b9b6e8a18ce5bc8fe696ade782b9e7bbade4bca0
+                            write_multi_min_size: Some(1024 * 1024),
+                            write_multi_max_size: Some(50 * 1024 * 1024),
+
+                            delete: true,
+                            rename: true,
+                            copy: true,
+
+                            list: true,
+                            list_with_limit: true,
+                            list_has_content_length: true,
+                            list_has_content_type: true,
+                            list_has_last_modified: true,
+
+                            shared: true,
+
+                            ..Default::default()
+                        });
+
+                    am.into()
+                },
                 root,
                 operator,
-                password,
                 bucket: self.config.bucket.clone(),
                 signer,
                 client,
@@ -231,48 +231,18 @@ pub struct UpyunBackend {
     core: Arc<UpyunCore>,
 }
 
-#[async_trait]
-impl Accessor for UpyunBackend {
-    type Reader = IncomingAsyncBody;
+impl Access for UpyunBackend {
+    type Reader = HttpBody;
     type Writer = UpyunWriters;
     type Lister = oio::PageLister<UpyunLister>;
+    type Deleter = oio::OneShotDeleter<UpyunDeleter>;
     type BlockingReader = ();
     type BlockingWriter = ();
     type BlockingLister = ();
+    type BlockingDeleter = ();
 
-    fn info(&self) -> AccessorInfo {
-        let mut am = AccessorInfo::default();
-        am.set_scheme(Scheme::Upyun)
-            .set_root(&self.core.root)
-            .set_native_capability(Capability {
-                stat: true,
-
-                create_dir: true,
-
-                read: true,
-                read_can_next: true,
-
-                write: true,
-                write_can_empty: true,
-                write_can_multi: true,
-                write_with_cache_control: true,
-                write_with_content_type: true,
-
-                // https://help.upyun.com/knowledge-base/rest_api/#e5b9b6e8a18ce5bc8fe696ade782b9e7bbade4bca0
-                write_multi_min_size: Some(1024 * 1024),
-                write_multi_max_size: Some(50 * 1024 * 1024),
-
-                delete: true,
-                rename: true,
-                copy: true,
-
-                list: true,
-                list_with_limit: true,
-
-                ..Default::default()
-            });
-
-        am
+    fn info(&self) -> Arc<AccessorInfo> {
+        self.core.info.clone()
     }
 
     async fn create_dir(&self, path: &str, _: OpCreateDir) -> Result<RpCreateDir> {
@@ -282,7 +252,7 @@ impl Accessor for UpyunBackend {
 
         match status {
             StatusCode::OK => Ok(RpCreateDir::default()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -293,47 +263,42 @@ impl Accessor for UpyunBackend {
 
         match status {
             StatusCode::OK => parse_info(resp.headers()).map(RpStat::new),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    async fn read(&self, path: &str, _args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let resp = self.core.download_file(path).await?;
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
+        let resp = self.core.download_file(path, args.range()).await?;
 
         let status = resp.status();
 
         match status {
-            StatusCode::OK => {
-                let size = parse_content_length(resp.headers())?;
-                let range = parse_content_range(resp.headers())?;
-                Ok((
-                    RpRead::new().with_size(size).with_range(range),
-                    resp.into_body(),
-                ))
+            StatusCode::OK | StatusCode::PARTIAL_CONTENT => {
+                Ok((RpRead::default(), resp.into_body()))
             }
-            _ => Err(parse_error(resp).await?),
+            _ => {
+                let (part, mut body) = resp.into_parts();
+                let buf = body.to_buffer().await?;
+                Err(parse_error(Response::from_parts(part, buf)))
+            }
         }
     }
 
     async fn write(&self, path: &str, args: OpWrite) -> Result<(RpWrite, Self::Writer)> {
+        let concurrent = args.concurrent();
+        let executor = args.executor().cloned();
         let writer = UpyunWriter::new(self.core.clone(), args, path.to_string());
 
-        let w = oio::MultipartUploadWriter::new(writer);
+        let w = oio::MultipartWriter::new(writer, executor, concurrent);
 
         Ok((RpWrite::default(), w))
     }
 
-    async fn delete(&self, path: &str, _: OpDelete) -> Result<RpDelete> {
-        let resp = self.core.delete(path).await?;
-
-        let status = resp.status();
-
-        match status {
-            StatusCode::OK => Ok(RpDelete::default()),
-            // Allow 404 when deleting a non-existing object
-            StatusCode::NOT_FOUND => Ok(RpDelete::default()),
-            _ => Err(parse_error(resp).await?),
-        }
+    async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
+        Ok((
+            RpDelete::default(),
+            oio::OneShotDeleter::new(UpyunDeleter::new(self.core.clone())),
+        ))
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
@@ -347,12 +312,8 @@ impl Accessor for UpyunBackend {
         let status = resp.status();
 
         match status {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-
-                Ok(RpCopy::default())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(RpCopy::default()),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -362,12 +323,8 @@ impl Accessor for UpyunBackend {
         let status = resp.status();
 
         match status {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-
-                Ok(RpRename::default())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(RpRename::default()),
+            _ => Err(parse_error(resp)),
         }
     }
 }

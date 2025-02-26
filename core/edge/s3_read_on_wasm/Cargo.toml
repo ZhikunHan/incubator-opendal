@@ -16,22 +16,23 @@
 # under the License.
 
 [package]
-edition = "2021"
 name = "edge_test_s3_read_on_wasm"
-publish = false
-version = "0.0.0"
 
+edition.workspace = true
 license.workspace = true
+publish = false
+rust-version.workspace = true
+version.workspace = true
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-opendal = { path = "../../", default-features = false, features = [
+opendal = { path = "../..", default-features = false, features = [
   "services-s3",
 ] }
 wasm-bindgen = "0.2.89"
 wasm-bindgen-futures = "0.4.39"
 
 [dev-dependencies]
-wasm-bindgen-test = "0.3.0"
+wasm-bindgen-test = "0.3.41"

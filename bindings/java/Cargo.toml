@@ -19,20 +19,18 @@
 name = "opendal-java"
 publish = false
 
-authors.workspace = true
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
-version.workspace = true
+authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
+edition = "2021"
+homepage = "https://opendal.apache.org/"
+license = "Apache-2.0"
+repository = "https://github.com/apache/opendal"
+rust-version = "1.75"
 
 [lib]
 crate-type = ["cdylib"]
 doc = false
 
 [features]
-# Enable all opendal default feature by default.
 default = [
   "services-azblob",
   "services-azdls",
@@ -52,8 +50,9 @@ default = [
 
 services-all = [
   "default",
-
+  "services-aliyun-drive",
   "services-cacache",
+  "services-chainsafe",
   "services-dashmap",
   "services-dropbox",
   "services-etcd",
@@ -72,31 +71,32 @@ services-all = [
   "services-onedrive",
   "services-persy",
   "services-postgresql",
+  "services-koofr",
   "services-mysql",
   "services-redb",
   "services-redis",
   # FIXME: rocksdb will lead to "cannot allocate memory in static TLS block" while linking.
   # "services-rocksdb",
   "services-sled",
-  "services-supabase",
   "services-tikv",
   "services-vercel-artifacts",
-  "services-wasabi",
   "services-mongodb",
   "services-gridfs",
   "services-sqlite",
   "services-azfile",
-  "services-libsql",
   "services-swift",
   "services-alluxio",
   "services-b2",
   "services-seafile",
   "services-upyun",
+  "services-yandex-disk",
 ]
 
 # Default services provided by opendal.
+services-aliyun-drive = ["opendal/services-aliyun-drive"]
 services-azblob = ["opendal/services-azblob"]
 services-azdls = ["opendal/services-azdls"]
+services-chainsafe = ["opendal/services-chainsafe"]
 services-cos = ["opendal/services-cos"]
 services-fs = ["opendal/services-fs"]
 services-gcs = ["opendal/services-gcs"]
@@ -125,11 +125,12 @@ services-gridfs = ["opendal/services-gridfs"]
 services-hdfs = ["opendal/services-hdfs"]
 services-huggingface = ["opendal/services-huggingface"]
 services-ipfs = ["opendal/services-ipfs"]
-services-libsql = ["opendal/services-libsql"]
+services-koofr = ["opendal/services-koofr"]
 services-memcached = ["opendal/services-memcached"]
 services-mini-moka = ["opendal/services-mini-moka"]
 services-moka = ["opendal/services-moka"]
 services-mongodb = ["opendal/services-mongodb"]
+services-monoiofs = ["opendal/services-monoiofs"]
 services-mysql = ["opendal/services-mysql"]
 services-onedrive = ["opendal/services-onedrive"]
 services-persy = ["opendal/services-persy"]
@@ -141,19 +142,20 @@ services-seafile = ["opendal/services-seafile"]
 services-sftp = ["opendal/services-sftp"]
 services-sled = ["opendal/services-sled"]
 services-sqlite = ["opendal/services-sqlite"]
-services-supabase = ["opendal/services-supabase"]
 services-swift = ["opendal/services-swift"]
 services-tikv = ["opendal/services-tikv"]
 services-upyun = ["opendal/services-upyun"]
 services-vercel-artifacts = ["opendal/services-vercel-artifacts"]
-services-wasabi = ["opendal/services-wasabi"]
+services-yandex-disk = ["opendal/services-yandex-disk"]
 
 [dependencies]
 anyhow = "1.0.71"
 jni = "0.21.1"
-num_cpus = "1.15.0"
 once_cell = "1.19.0"
-opendal = { workspace = true }
+# this crate won't be published, we always use the local version
+opendal = { version = ">=0", path = "../../core", features = [
+  "layers-blocking",
+] }
 tokio = { version = "1.28.1", features = ["full"] }
 
 # This is not optimal. See also the Cargo issue:
@@ -163,4 +165,4 @@ features = [
   # Depend on "openssh" which depends on "tokio-pipe" that is unavailable on Windows.
   "services-sftp",
 ]
-workspace = true
+path = "../../core"

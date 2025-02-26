@@ -17,7 +17,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use http::StatusCode;
 
 use super::core::GdriveCore;
@@ -37,11 +36,9 @@ impl GdriveLister {
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 impl oio::PageList for GdriveLister {
     async fn next_page(&self, ctx: &mut oio::PageContext) -> Result<()> {
-        let file_id = self.core.get_file_id_by_path(&self.path).await?;
+        let file_id = self.core.path_cache.get(&self.path).await?;
 
         let file_id = match file_id {
             Some(file_id) => file_id,
@@ -57,14 +54,21 @@ impl oio::PageList for GdriveLister {
             .await?;
 
         let bytes = match resp.status() {
-            StatusCode::OK => resp.into_body().bytes().await?,
-            _ => return Err(parse_error(resp).await?),
+            StatusCode::OK => resp.into_body().to_bytes(),
+            _ => return Err(parse_error(resp)),
         };
 
-        // Gdrive returns empty content when this dir is not exist.
+        // Google Drive returns an empty response when attempting to list a non-existent directory.
         if bytes.is_empty() {
             ctx.done = true;
             return Ok(());
+        }
+
+        // Include the current directory itself when handling the first page of the listing.
+        if ctx.token.is_empty() && !ctx.done {
+            let path = build_rel_path(&self.core.root, &self.path);
+            let e = oio::Entry::new(&path, Metadata::new(EntryMode::DIR));
+            ctx.entries.push_back(e);
         }
 
         let decoded_response =
@@ -78,18 +82,26 @@ impl oio::PageList for GdriveLister {
 
         for mut file in decoded_response.files {
             let file_type = if file.mime_type.as_str() == "application/vnd.google-apps.folder" {
-                file.name = format!("{}/", file.name);
+                if !file.name.ends_with('/') {
+                    file.name += "/";
+                }
                 EntryMode::DIR
             } else {
                 EntryMode::FILE
             };
 
             let root = &self.core.root;
-            let path = format!("{}{}", build_rooted_abs_path(root, &self.path), file.name);
+            let path = format!("{}{}", &self.path, file.name);
             let normalized_path = build_rel_path(root, &path);
 
-            let entry = oio::Entry::new(&normalized_path, Metadata::new(file_type));
+            // Update path cache when path doesn't exist.
+            // When Google Drive converts a format, for example, Microsoft PowerPoint,
+            // Google Drive keeps two entries with the same ID.
+            if let Ok(None) = self.core.path_cache.get(&path).await {
+                self.core.path_cache.insert(&path, &file.id).await;
+            }
 
+            let entry = oio::Entry::new(&normalized_path, Metadata::new(file_type));
             ctx.entries.push_back(entry);
         }
 

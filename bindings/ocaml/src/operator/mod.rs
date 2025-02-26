@@ -60,7 +60,7 @@ pub fn blocking_stat(
 #[ocaml::func]
 #[ocaml::sig("operator -> string -> (bool, string) Result.t ")]
 pub fn blocking_is_exist(operator: &mut Operator, path: String) -> Result<bool, String> {
-    map_res_error(operator.0.is_exist(path.as_str()))
+    map_res_error(operator.0.exists(path.as_str()))
 }
 
 #[ocaml::func]
@@ -72,7 +72,7 @@ pub fn blocking_create_dir(operator: &mut Operator, path: String) -> Result<(), 
 #[ocaml::func]
 #[ocaml::sig("operator -> string -> (char array, string) Result.t ")]
 pub fn blocking_read(operator: &mut Operator, path: String) -> Result<Vec<u8>, String> {
-    map_res_error(operator.0.read(path.as_str()))
+    map_res_error(operator.0.read(path.as_str()).map(|v| v.to_vec()))
 }
 
 #[ocaml::func]
@@ -91,7 +91,7 @@ pub fn blocking_write(
     path: String,
     bs: &'static [u8],
 ) -> Result<(), String> {
-    map_res_error(operator.0.write(path.as_str(), bs))
+    map_res_error(operator.0.write(path.as_str(), bs).map(|_| ()))
 }
 
 #[ocaml::func]

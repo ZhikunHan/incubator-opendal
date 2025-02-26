@@ -15,11 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::VecDeque;
-use std::fmt::Debug;
-use std::fmt::Formatter;
-use std::fmt::Write;
-
 use http::header::CONTENT_DISPOSITION;
 use http::header::CONTENT_LENGTH;
 use http::header::CONTENT_TYPE;
@@ -32,9 +27,14 @@ use http::StatusCode;
 use reqsign::AzureStorageCredential;
 use reqsign::AzureStorageLoader;
 use reqsign::AzureStorageSigner;
+use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Formatter;
+use std::fmt::Write;
+use std::sync::Arc;
 
+use super::error::parse_error;
 use crate::raw::*;
-use crate::services::azfile::error::parse_error;
 use crate::*;
 
 const X_MS_VERSION: &str = "x-ms-version";
@@ -45,6 +45,7 @@ const X_MS_TYPE: &str = "x-ms-type";
 const X_MS_FILE_RENAME_REPLACE_IF_EXISTS: &str = "x-ms-file-rename-replace-if-exists";
 
 pub struct AzfileCore {
+    pub info: Arc<AccessorInfo>,
     pub root: String,
     pub endpoint: String,
     pub share_name: String,
@@ -93,15 +94,11 @@ impl AzfileCore {
     }
 
     #[inline]
-    pub async fn send(&self, req: Request<AsyncBody>) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn send(&self, req: Request<Buffer>) -> Result<Response<Buffer>> {
         self.client.send(req).await
     }
 
-    pub async fn azfile_read(
-        &self,
-        path: &str,
-        range: BytesRange,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_read(&self, path: &str, range: BytesRange) -> Result<Response<HttpBody>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -114,24 +111,12 @@ impl AzfileCore {
         let mut req = Request::get(&url);
 
         if !range.is_full() {
-            // azfile doesn't support read with suffix range.
-            //
-            // ref: https://learn.microsoft.com/en-us/rest/api/storageservices/specifying-the-range-header-for-file-service-operations
-            if range.offset().is_none() && range.size().is_some() {
-                return Err(Error::new(
-                    ErrorKind::Unsupported,
-                    "azblob doesn't support read with suffix range",
-                ));
-            }
-
             req = req.header(RANGE, range.to_header());
         }
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
-        self.send(req).await
+        self.client.fetch(req).await
     }
 
     pub async fn azfile_create_file(
@@ -139,7 +124,7 @@ impl AzfileCore {
         path: &str,
         size: usize,
         args: &OpWrite,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -169,9 +154,7 @@ impl AzfileCore {
             req = req.header(CONTENT_DISPOSITION, pos);
         }
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
@@ -181,8 +164,8 @@ impl AzfileCore {
         path: &str,
         size: u64,
         position: u64,
-        body: AsyncBody,
-    ) -> Result<Response<IncomingAsyncBody>> {
+        body: Buffer,
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -210,10 +193,7 @@ impl AzfileCore {
         self.send(req).await
     }
 
-    pub async fn azfile_get_file_properties(
-        &self,
-        path: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_get_file_properties(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
         let url = format!(
             "{}/{}/{}",
@@ -224,17 +204,12 @@ impl AzfileCore {
 
         let req = Request::head(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
 
-    pub async fn azfile_get_directory_properties(
-        &self,
-        path: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_get_directory_properties(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -246,18 +221,12 @@ impl AzfileCore {
 
         let req = Request::head(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
 
-    pub async fn azfile_rename(
-        &self,
-        path: &str,
-        new_path: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_rename(&self, path: &str, new_path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -302,14 +271,12 @@ impl AzfileCore {
 
         req = req.header(X_MS_FILE_RENAME_REPLACE_IF_EXISTS, "true");
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
 
-    pub async fn azfile_create_dir(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_create_dir(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -325,14 +292,12 @@ impl AzfileCore {
 
         req = req.header(CONTENT_LENGTH, 0);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
 
-    pub async fn azfile_delete_file(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_delete_file(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -346,14 +311,12 @@ impl AzfileCore {
 
         let req = Request::delete(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
 
-    pub async fn azfile_delete_dir(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn azfile_delete_dir(&self, path: &str) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -367,9 +330,7 @@ impl AzfileCore {
 
         let req = Request::delete(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
@@ -379,7 +340,7 @@ impl AzfileCore {
         path: &str,
         limit: &Option<usize>,
         continuation: &String,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path)
             .trim_start_matches('/')
             .to_string();
@@ -401,9 +362,7 @@ impl AzfileCore {
 
         let req = Request::get(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
         self.send(req).await
     }
@@ -444,7 +403,7 @@ impl AzfileCore {
                 continue;
             }
 
-            return Err(parse_error(resp).await?);
+            return Err(parse_error(resp));
         }
 
         Ok(())

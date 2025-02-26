@@ -27,7 +27,7 @@ inputs:
   need-protoc:
     description: "This setup needs protoc or not"
   need-deny:
-      description: "This setup needs cargo-deny or not"
+    description: "This setup needs cargo-deny or not"
   github-token:
     description: "Github Token"
     default: ""
@@ -40,7 +40,7 @@ runs:
       run: |
         # Disable full debug symbol generation to speed up CI build and keep memory down
         # "1" means line tables only, which is useful for panic tracebacks.
-        # About `force-frame-pointers`, here's the discussion history: https://github.com/apache/incubator-opendal/issues/3756
+        # About `force-frame-pointers`, here's the discussion history: https://github.com/apache/opendal/issues/3756
         echo "RUSTFLAGS=-C force-frame-pointers=yes -C debuginfo=1" >> $GITHUB_ENV
         # Enable backtraces
         echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
@@ -59,40 +59,40 @@ runs:
 
     - name: Setup Protoc
       if: inputs.need-protoc == 'true'
-      uses: arduino/setup-protoc@v2
+      uses: arduino/setup-protoc@v3
       with:
         version: "23.4"
         repo-token: ${{ inputs.github-token }}
 
     - name: Cache nextest on linux
       id: cache-nextest
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       if: inputs.need-nextest == 'true'
       with:
         path: |
           ~/.cargo/bin/cargo-nextest
           ~/.cargo/bin/cargo-nextest.exe
-        key: r0-${{runner.os}}-nextest-0.9.59
+        key: r0-${{runner.os}}-nextest-0.9.72
 
     - name: Build nextest if not cached
       if: steps.cache-nextest.outputs.cache-hit != 'true' && inputs.need-nextest == 'true'
       shell: bash
-      run: cargo install cargo-nextest@0.9.59 --locked
+      run: cargo install cargo-nextest@0.9.72 --locked
 
     - name: Cache cargo-deny on linux
       id: cache-deny
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       if: inputs.need-deny == 'true'
       with:
-          path: |
-              ~/.cargo/bin/cargo-deny
-              ~/.cargo/bin/cargo-deny.exe
-          key: r0-${{runner.os}}-deny-0.14.3
+        path: |
+          ~/.cargo/bin/cargo-deny
+          ~/.cargo/bin/cargo-deny.exe
+        key: r0-${{runner.os}}-deny-0.14.22
 
     - name: Build cargo-deny if not cached
       if: steps.cache-deny.outputs.cache-hit != 'true' && inputs.need-deny == 'true'
       shell: bash
-      run: cargo install cargo-deny@0.14.3 --locked
+      run: cargo install cargo-deny@0.14.22 --locked
 
     - name: Setup rust on linux
       if: runner.os == 'Linux' && inputs.need-rocksdb == 'true'
@@ -103,7 +103,7 @@ runs:
 
     - name: Cache rocksdb
       id: cache-rocksdb
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       if: runner.os == 'Linux' && inputs.need-rocksdb == 'true'
       with:
         path: /tmp/rocksdb
@@ -130,7 +130,7 @@ runs:
 
     - name: Cache foundationdb
       id: cache-foundationdb
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       if: runner.os == 'Linux' && inputs.need-foundationdb == 'true'
       with:
         path: /etc/foundationdb

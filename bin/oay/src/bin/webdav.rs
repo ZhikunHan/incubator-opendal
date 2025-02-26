@@ -22,16 +22,10 @@ use oay::services::WebdavService;
 use oay::Config;
 use opendal::services::Fs;
 use opendal::Operator;
-use tracing_subscriber::fmt;
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::registry()
-        .with(fmt::layer().pretty())
-        .with(EnvFilter::from_default_env())
-        .init();
+    logforth::stderr().apply();
 
     let cfg: Config = Config {
         backend: oay::BackendConfig {
@@ -47,8 +41,7 @@ async fn main() -> Result<()> {
         },
     };
 
-    let mut builder = Fs::default();
-    builder.root("/tmp");
+    let builder = Fs::default().root("/tmp");
 
     let op = Operator::new(builder)?.finish();
 

@@ -17,7 +17,6 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use http::header;
 use http::Request;
 use http::StatusCode;
@@ -45,19 +44,18 @@ impl SeafileWriter {
     }
 }
 
-#[async_trait]
 impl oio::OneShotWrite for SeafileWriter {
-    async fn write_once(&self, bs: &dyn oio::WriteBuf) -> Result<()> {
-        let path = build_abs_path(&self.core.root, &self.path);
-        let bs = oio::ChunkedBytes::from_vec(bs.vectored_bytes(bs.remaining()));
-
+    async fn write_once(&self, bs: Buffer) -> Result<Metadata> {
         let upload_url = self.core.get_upload_url().await?;
 
         let req = Request::post(upload_url);
 
-        let paths = path.split('/').collect::<Vec<&str>>();
-        let filename = paths[paths.len() - 1];
-        let relative_path = path.replace(filename, "");
+        let (filename, relative_path) = if self.path.ends_with('/') {
+            ("", build_abs_path(&self.core.root, &self.path))
+        } else {
+            let (filename, relative_path) = (get_basename(&self.path), get_parent(&self.path));
+            (filename, build_abs_path(&self.core.root, relative_path))
+        };
 
         let file_part = FormDataPart::new("file")
             .header(
@@ -66,13 +64,13 @@ impl oio::OneShotWrite for SeafileWriter {
                     .parse()
                     .unwrap(),
             )
-            .stream(bs.len() as u64, Box::new(bs));
+            .content(bs);
 
         let multipart = Multipart::new()
-            .part(file_part)
             .part(FormDataPart::new("parent_dir").content("/"))
             .part(FormDataPart::new("relative_path").content(relative_path.clone()))
-            .part(FormDataPart::new("replace").content("1"));
+            .part(FormDataPart::new("replace").content("1"))
+            .part(file_part);
 
         let req = multipart.apply(req)?;
 
@@ -81,11 +79,8 @@ impl oio::OneShotWrite for SeafileWriter {
         let status = resp.status();
 
         match status {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(Metadata::default()),
+            _ => Err(parse_error(resp)),
         }
     }
 }

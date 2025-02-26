@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use async_trait::async_trait;
+use bytes::Buf;
 use bytes::Bytes;
 use http::StatusCode;
 
@@ -23,7 +23,6 @@ use super::backend::OnedriveBackend;
 use super::error::parse_error;
 use super::graph_model::OneDriveUploadSessionCreationRequestBody;
 use super::graph_model::OneDriveUploadSessionCreationResponseBody;
-use crate::raw::oio::WriteBuf;
 use crate::raw::*;
 use crate::*;
 
@@ -44,27 +43,25 @@ impl OneDriveWriter {
     }
 }
 
-#[async_trait]
 impl oio::OneShotWrite for OneDriveWriter {
-    async fn write_once(&self, bs: &dyn WriteBuf) -> Result<()> {
-        let bs = bs.bytes(bs.remaining());
+    async fn write_once(&self, bs: Buffer) -> Result<Metadata> {
         let size = bs.len();
 
         if size <= Self::MAX_SIMPLE_SIZE {
             self.write_simple(bs).await?;
         } else {
-            self.write_chunked(bs).await?;
+            self.write_chunked(bs.to_bytes()).await?;
         }
 
-        Ok(())
+        Ok(Metadata::default())
     }
 }
 
 impl OneDriveWriter {
-    async fn write_simple(&self, bs: Bytes) -> Result<()> {
+    async fn write_simple(&self, bs: Buffer) -> Result<()> {
         let resp = self
             .backend
-            .onedrive_upload_simple(&self.path, Some(bs.len()), &self.op, AsyncBody::Bytes(bs))
+            .onedrive_upload_simple(&self.path, Some(bs.len()), &self.op, bs)
             .await?;
 
         let status = resp.status();
@@ -72,11 +69,8 @@ impl OneDriveWriter {
         match status {
             // Typical response code: 201 Created
             // Reference: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content?view=odsp-graph-online#response
-            StatusCode::CREATED | StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::CREATED | StatusCode::OK => Ok(()),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -108,7 +102,7 @@ impl OneDriveWriter {
                     offset,
                     chunk_end,
                     total_len,
-                    AsyncBody::Bytes(Bytes::copy_from_slice(chunk)),
+                    Buffer::from(Bytes::copy_from_slice(chunk)),
                 )
                 .await?;
 
@@ -117,10 +111,8 @@ impl OneDriveWriter {
             match status {
                 // Typical response code: 202 Accepted
                 // Reference: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_put_content?view=odsp-graph-online#response
-                StatusCode::ACCEPTED | StatusCode::CREATED | StatusCode::OK => {
-                    resp.into_body().consume().await?;
-                }
-                _ => return Err(parse_error(resp).await?),
+                StatusCode::ACCEPTED | StatusCode::CREATED | StatusCode::OK => {}
+                _ => return Err(parse_error(resp)),
             }
 
             offset += OneDriveWriter::CHUNK_SIZE_FACTOR;
@@ -130,7 +122,7 @@ impl OneDriveWriter {
     }
 
     async fn create_upload_session(&self) -> Result<OneDriveUploadSessionCreationResponseBody> {
-        let file_name_from_path = self.path.split('/').last().ok_or_else(|| {
+        let file_name_from_path = self.path.split('/').next_back().ok_or_else(|| {
             Error::new(
                 ErrorKind::Unexpected,
                 "connection string must have AccountName",
@@ -153,12 +145,12 @@ impl OneDriveWriter {
         match status {
             // Reference: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_createuploadsession?view=odsp-graph-online#response
             StatusCode::OK => {
-                let bs = resp.into_body().bytes().await?;
+                let bs = resp.into_body();
                 let result: OneDriveUploadSessionCreationResponseBody =
-                    serde_json::from_slice(&bs).map_err(new_json_deserialize_error)?;
+                    serde_json::from_reader(bs.reader()).map_err(new_json_deserialize_error)?;
                 Ok(result)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 }

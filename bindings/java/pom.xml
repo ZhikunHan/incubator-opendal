@@ -31,12 +31,12 @@
     </parent>
 
     <groupId>org.apache.opendal</groupId>
-    <artifactId>opendal-java</artifactId>
-    <version>0.44.1</version>
+    <artifactId>opendal</artifactId>
+    <version>0.47.9</version> <!-- update version number -->
 
-    <name>Apache OpenDAL</name>
+    <name>Apache OpenDAL™</name>
     <description>
-        OpenDAL is a data access layer that allows users to
+        Apache OpenDAL™ is a data access layer that allows users to
         easily and efficiently retrieve data from various storage services in a unified way.
     </description>
 
@@ -67,17 +67,20 @@
 
         <!-- library dependencies -->
         <assertj.version>3.23.1</assertj.version>
+        <commons-io.version>2.16.1</commons-io.version>
         <dotenv.version>2.3.2</dotenv.version>
-        <lombok.version>1.18.30</lombok.version>
+        <lombok.version>1.18.34</lombok.version>
         <slf4j.version>2.0.7</slf4j.version>
         <httpclient.version>5.2</httpclient.version>
 
         <!-- plugins dependencies -->
         <maven-surefire-plugin.version>3.1.2</maven-surefire-plugin.version>
+        <maven-compiler-plugin.version>3.13.0</maven-compiler-plugin.version>
         <exec-maven-plugin.version>3.1.0</exec-maven-plugin.version>
         <os-maven-plugin.version>1.7.0</os-maven-plugin.version>
         <palantir-java-format.version>2.36.0</palantir-java-format.version>
         <spotless.version>2.39.0</spotless.version>
+        <maven-javadoc-plugin.version>3.6.3</maven-javadoc-plugin.version>
     </properties>
 
     <dependencyManagement>
@@ -108,6 +111,12 @@
                 <groupId>io.github.cdimascio</groupId>
                 <artifactId>dotenv-java</artifactId>
                 <version>${dotenv.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>commons-io</groupId>
+                <artifactId>commons-io</artifactId>
+                <version>${commons-io.version}</version>
+                <scope>test</scope>
             </dependency>
             <dependency>
                 <groupId>org.apache.httpcomponents.client5</groupId>
@@ -148,6 +157,11 @@
         <dependency>
             <groupId>io.github.cdimascio</groupId>
             <artifactId>dotenv-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -212,6 +226,20 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>${maven-compiler-plugin.version}</version>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>${lombok.version}</version>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>${maven-surefire-plugin.version}</version>
             </plugin>
@@ -261,6 +289,18 @@
                         <trimTrailingWhitespace/>
                         <endWithNewline/>
                     </java>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>${maven-javadoc-plugin.version}</version>
+                <configuration>
+                    <bottom>
+                        Copyright © 2022-2024, The Apache Software Foundation. Apache OpenDAL, OpenDAL, and Apache
+                        are either registered trademarks or trademarks of the Apache Software Foundation.
+                    </bottom>
                 </configuration>
             </plugin>
         </plugins>

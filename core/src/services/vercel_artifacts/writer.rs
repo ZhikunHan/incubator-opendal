@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use async_trait::async_trait;
 use http::StatusCode;
 
 use super::backend::VercelArtifactsBackend;
@@ -40,28 +39,18 @@ impl VercelArtifactsWriter {
     }
 }
 
-#[async_trait]
 impl oio::OneShotWrite for VercelArtifactsWriter {
-    async fn write_once(&self, bs: &dyn oio::WriteBuf) -> Result<()> {
-        let bs = oio::ChunkedBytes::from_vec(bs.vectored_bytes(bs.remaining()));
-
+    async fn write_once(&self, bs: Buffer) -> Result<Metadata> {
         let resp = self
             .backend
-            .vercel_artifacts_put(
-                self.path.as_str(),
-                bs.len() as u64,
-                AsyncBody::ChunkedBytes(bs),
-            )
+            .vercel_artifacts_put(self.path.as_str(), bs.len() as u64, bs)
             .await?;
 
         let status = resp.status();
 
         match status {
-            StatusCode::OK | StatusCode::ACCEPTED => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK | StatusCode::ACCEPTED => Ok(Metadata::default()),
+            _ => Err(parse_error(resp)),
         }
     }
 }
