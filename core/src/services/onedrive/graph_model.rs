@@ -22,18 +22,24 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GraphApiOnedriveListResponse {
-    #[serde(rename = "@odata.count")]
-    pub odata_count: usize,
     #[serde(rename = "@odata.nextLink")]
     pub next_link: Option<String>,
     pub value: Vec<OneDriveItem>,
 }
 
-/// DriveItem representation
-/// https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/list?view=odsp-graph-online#json-representation
+/// mapping for a DriveItem representation
+/// read more at https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/driveitem
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OneDriveItem {
     pub name: String,
+
+    #[serde(rename = "lastModifiedDateTime")]
+    pub last_modified_date_time: String,
+
+    #[serde(rename = "eTag")]
+    pub e_tag: String,
+
+    pub size: i64,
 
     #[serde(rename = "parentReference")]
     pub parent_reference: ParentReference,
@@ -47,6 +53,9 @@ pub struct ParentReference {
     pub path: String,
 }
 
+/// Additional properties when represents a facet of a "DriveItem":
+/// - "file", read more at https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/file
+/// - "folder", read more at https://learn.microsoft.com/en-us/onedrive/developer/rest-api/resources/folder
 #[derive(Debug, Serialize, Deserialize, PartialEq, Clone)]
 #[serde(untagged)]
 pub enum ItemType {
@@ -112,8 +121,6 @@ struct EmptyStruct {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct FileUploadItem {
-    #[serde(rename = "@odata.type")]
-    odata_type: String,
     #[serde(rename = "@microsoft.graph.conflictBehavior")]
     microsoft_graph_conflict_behavior: String,
     name: String,
@@ -136,7 +143,6 @@ impl OneDriveUploadSessionCreationRequestBody {
     pub fn new(path: String) -> Self {
         OneDriveUploadSessionCreationRequestBody {
             item: FileUploadItem {
-                odata_type: "microsoft.graph.driveItemUploadableProperties".to_string(),
                 microsoft_graph_conflict_behavior: "replace".to_string(),
                 name: path,
             },
@@ -148,7 +154,6 @@ impl OneDriveUploadSessionCreationRequestBody {
 fn test_parse_one_drive_json() {
     let data = r#"{
         "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('user_id')/drive/root/children",
-        "@odata.count": 1,
         "value": [
             {
                 "createdDateTime": "2020-01-01T00:00:00Z",
@@ -209,7 +214,7 @@ fn test_parse_one_drive_json() {
                     "path": "/drive/root:"
                 },
                 "file": {
-                    "mimeType": "application/pdf",
+                    "mimeType": "application/pdf"
                 },
                 "fileSystemInfo": {
                     "createdDateTime": "2018-12-30T05:32:55.46Z",
@@ -220,7 +225,6 @@ fn test_parse_one_drive_json() {
     }"#;
 
     let response: GraphApiOnedriveListResponse = serde_json::from_str(data).unwrap();
-    assert_eq!(response.odata_count, 1);
     assert_eq!(response.value.len(), 2);
     let item = &response.value[0];
     assert_eq!(item.name, "name");
@@ -231,7 +235,6 @@ fn test_parse_folder_single() {
     let response_json = r#"
     {
         "@odata.context": "https://graph.microsoft.com/v1.0/$metadata#users('great.cat%40outlook.com')/drive/root/children",
-        "@odata.count": 1,
         "value": [
           {
             "createdDateTime": "2023-02-01T00:51:02.803Z",
@@ -288,7 +291,6 @@ fn test_parse_folder_single() {
       }"#;
 
     let response: GraphApiOnedriveListResponse = serde_json::from_str(response_json).unwrap();
-    assert_eq!(response.odata_count, 1);
     assert_eq!(response.value.len(), 1);
     let item = &response.value[0];
     if let ItemType::Folder { folder, .. } = &item.item_type {

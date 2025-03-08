@@ -35,28 +35,31 @@ export function run(op) {
       }
     })
 
-    test.runIf(op.capability().write && op.capability().writeCanMulti)('reader/writer stream pipeline', async () => {
-      const filename = `random_file_${randomUUID()}`
-      const buf = generateFixedBytes(5 * 1024 * 1024)
-      const rs = Readable.from(buf, {
-        highWaterMark: 5 * 1024 * 1024, // to buffer 5MB data to read
-      })
-      const w = await op.writer(filename)
-      const ws = w.createWriteStream()
-      await pipeline(rs, ws)
+    test.runIf(op.capability().read && op.capability().write && op.capability().writeCanMulti)(
+      'reader/writer stream pipeline',
+      async () => {
+        const filename = `random_file_${randomUUID()}`
+        const buf = generateFixedBytes(5 * 1024 * 1024)
+        const rs = Readable.from(buf, {
+          highWaterMark: 5 * 1024 * 1024, // to buffer 5MB data to read
+        })
+        const w = await op.writer(filename)
+        const ws = w.createWriteStream()
+        await pipeline(rs, ws)
 
-      await finished(ws)
+        await finished(ws)
 
-      const t = await op.stat(filename)
-      assert.equal(t.contentLength, buf.length)
+        const t = await op.stat(filename)
+        assert.equal(t.contentLength, buf.length)
 
-      const content = await op.read(filename)
-      assert.equal(Buffer.compare(content, buf), 0) // 0 means equal
+        const content = await op.read(filename)
+        assert.equal(Buffer.compare(content, buf), 0) // 0 means equal
 
-      await op.delete(filename)
-    })
+        await op.delete(filename)
+      },
+    )
 
-    test.runIf(op.capability().write)('read stream', async () => {
+    test.runIf(op.capability().read && op.capability().write)('read stream', async () => {
       let c = generateFixedBytes(3 * 1024 * 1024)
       const filename = `random_file_${randomUUID()}`
 
@@ -80,6 +83,36 @@ export function run(op) {
       assert.equal(Buffer.compare(buf, c), 0)
 
       op.deleteSync(filename)
+    })
+
+    test.runIf(op.capability().read && op.capability().write)('write with behavior', async () => {
+      let c = Buffer.from('hello world')
+      const filename = `random_file_${randomUUID()}`
+
+      const options = { chunk: 1024n * 1024n }
+      if (op.capability().writeCanAppend) {
+        options.append = true
+      }
+      if (op.capability().writeWithContentType) {
+        options.contentType = 'text/plain'
+      }
+      if (op.capability().writeWithContentDisposition) {
+        options.contentDisposition = 'attachment;filename=test.txt'
+      }
+      if (op.capability().writeWithCacheControl) {
+        options.cacheControl = 'public, max-age=31536000, immutable'
+      }
+      await op.write(filename, c, options)
+
+      if (op.capability().writeCanMulti) {
+        const writer = await op.writer(filename, options)
+        await writer.write(c)
+        await writer.close()
+      }
+
+      if (op.capability().delete) {
+        op.deleteSync(filename)
+      }
     })
   })
 }

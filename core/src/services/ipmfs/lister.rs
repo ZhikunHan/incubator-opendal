@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
+use bytes::Buf;
 use http::StatusCode;
 use serde::Deserialize;
 
@@ -44,18 +44,17 @@ impl IpmfsLister {
     }
 }
 
-#[async_trait]
 impl oio::PageList for IpmfsLister {
     async fn next_page(&self, ctx: &mut oio::PageContext) -> Result<()> {
         let resp = self.backend.ipmfs_ls(&self.path).await?;
 
         if resp.status() != StatusCode::OK {
-            return Err(parse_error(resp).await?);
+            return Err(parse_error(resp));
         }
 
-        let bs = resp.into_body().bytes().await?;
+        let bs = resp.into_body();
         let entries_body: IpfsLsResponse =
-            serde_json::from_slice(&bs).map_err(new_json_deserialize_error)?;
+            serde_json::from_reader(bs.reader()).map_err(new_json_deserialize_error)?;
 
         // Mark dir stream has been consumed.
         ctx.done = true;

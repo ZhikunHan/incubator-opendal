@@ -17,6 +17,8 @@
 
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::fmt::Write;
+use std::sync::Arc;
 use std::time::Duration;
 
 use bytes::Bytes;
@@ -37,14 +39,20 @@ use serde::Serialize;
 use crate::raw::*;
 use crate::*;
 
+pub mod constants {
+    pub const COS_QUERY_VERSION_ID: &str = "versionId";
+
+    pub const X_COS_VERSION_ID: &str = "x-cos-version-id";
+}
+
 pub struct CosCore {
+    pub info: Arc<AccessorInfo>,
     pub bucket: String,
     pub root: String,
     pub endpoint: String,
 
     pub signer: TencentCosSigner,
     pub loader: TencentCosCredentialLoader,
-    pub client: HttpClient,
 }
 
 impl Debug for CosCore {
@@ -66,10 +74,13 @@ impl CosCore {
             .map_err(new_request_credential_error)?;
 
         if let Some(cred) = cred {
-            Ok(Some(cred))
-        } else {
-            Ok(None)
+            return Ok(Some(cred));
         }
+
+        Err(Error::new(
+            ErrorKind::PermissionDenied,
+            "no valid credential found and anonymous access is not allowed",
+        ))
     }
 
     pub async fn sign<T>(&self, req: &mut Request<T>) -> Result<()> {
@@ -95,8 +106,8 @@ impl CosCore {
     }
 
     #[inline]
-    pub async fn send(&self, req: Request<AsyncBody>) -> Result<Response<IncomingAsyncBody>> {
-        self.client.send(req).await
+    pub async fn send(&self, req: Request<Buffer>) -> Result<Response<Buffer>> {
+        self.info.http_client().send(req).await
     }
 }
 
@@ -104,19 +115,37 @@ impl CosCore {
     pub async fn cos_get_object(
         &self,
         path: &str,
+        range: BytesRange,
         args: &OpRead,
-    ) -> Result<Response<IncomingAsyncBody>> {
-        let mut req = self.cos_get_object_request(path, args)?;
+    ) -> Result<Response<HttpBody>> {
+        let mut req = self.cos_get_object_request(path, range, args)?;
 
         self.sign(&mut req).await?;
 
-        self.send(req).await
+        self.info.http_client().fetch(req).await
     }
 
-    pub fn cos_get_object_request(&self, path: &str, args: &OpRead) -> Result<Request<AsyncBody>> {
+    pub fn cos_get_object_request(
+        &self,
+        path: &str,
+        range: BytesRange,
+        args: &OpRead,
+    ) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
-        let url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+        let mut url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+
+        let mut query_args = Vec::new();
+        if let Some(version) = args.version() {
+            query_args.push(format!(
+                "{}={}",
+                constants::COS_QUERY_VERSION_ID,
+                percent_decode_path(version)
+            ))
+        }
+        if !query_args.is_empty() {
+            url.push_str(&format!("?{}", query_args.join("&")));
+        }
 
         let mut req = Request::get(&url);
 
@@ -124,7 +153,6 @@ impl CosCore {
             req = req.header(IF_MATCH, if_match);
         }
 
-        let range = args.range();
         if !range.is_full() {
             req = req.header(http::header::RANGE, range.to_header())
         }
@@ -133,9 +161,7 @@ impl CosCore {
             req = req.header(IF_NONE_MATCH, if_none_match);
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         Ok(req)
     }
@@ -145,8 +171,8 @@ impl CosCore {
         path: &str,
         size: Option<u64>,
         args: &OpWrite,
-        body: AsyncBody,
-    ) -> Result<Request<AsyncBody>> {
+        body: Buffer,
+    ) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
@@ -166,16 +192,31 @@ impl CosCore {
             req = req.header(CONTENT_TYPE, mime)
         }
 
+        // For a bucket which has never enabled versioning, you may use it to
+        // specify whether to prohibit overwriting the object with the same name
+        // when uploading the object:
+        //
+        // When the x-cos-forbid-overwrite is specified as true, overwriting the object
+        // with the same name will be prohibited.
+        //
+        // ref: https://www.tencentcloud.com/document/product/436/7749
+        if args.if_not_exists() {
+            req = req.header("x-cos-forbid-overwrite", "true")
+        }
+
+        // Set user metadata headers.
+        if let Some(user_metadata) = args.user_metadata() {
+            for (key, value) in user_metadata {
+                req = req.header(format!("x-cos-meta-{key}"), value)
+            }
+        }
+
         let req = req.body(body).map_err(new_request_build_error)?;
 
         Ok(req)
     }
 
-    pub async fn cos_head_object(
-        &self,
-        path: &str,
-        args: &OpStat,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn cos_head_object(&self, path: &str, args: &OpStat) -> Result<Response<Buffer>> {
         let mut req = self.cos_head_object_request(path, args)?;
 
         self.sign(&mut req).await?;
@@ -183,10 +224,22 @@ impl CosCore {
         self.send(req).await
     }
 
-    pub fn cos_head_object_request(&self, path: &str, args: &OpStat) -> Result<Request<AsyncBody>> {
+    pub fn cos_head_object_request(&self, path: &str, args: &OpStat) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
-        let url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+        let mut url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+
+        let mut query_args = Vec::new();
+        if let Some(version) = args.version() {
+            query_args.push(format!(
+                "{}={}",
+                constants::COS_QUERY_VERSION_ID,
+                percent_decode_path(version)
+            ))
+        }
+        if !query_args.is_empty() {
+            url.push_str(&format!("?{}", query_args.join("&")));
+        }
 
         let mut req = Request::head(&url);
 
@@ -198,23 +251,31 @@ impl CosCore {
             req = req.header(IF_NONE_MATCH, if_none_match);
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         Ok(req)
     }
 
-    pub async fn cos_delete_object(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn cos_delete_object(&self, path: &str, args: &OpDelete) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
-        let url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+        let mut url = format!("{}/{}", self.endpoint, percent_encode_path(&p));
+
+        let mut query_args = Vec::new();
+        if let Some(version) = args.version() {
+            query_args.push(format!(
+                "{}={}",
+                constants::COS_QUERY_VERSION_ID,
+                percent_decode_path(version)
+            ))
+        }
+        if !query_args.is_empty() {
+            url.push_str(&format!("?{}", query_args.join("&")));
+        }
 
         let req = Request::delete(&url);
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.sign(&mut req).await?;
 
@@ -227,8 +288,8 @@ impl CosCore {
         position: u64,
         size: u64,
         args: &OpWrite,
-        body: AsyncBody,
-    ) -> Result<Request<AsyncBody>> {
+        body: Buffer,
+    ) -> Result<Request<Buffer>> {
         let p = build_abs_path(&self.root, path);
         let url = format!(
             "{}/{}?append&position={}",
@@ -257,11 +318,7 @@ impl CosCore {
         Ok(req)
     }
 
-    pub async fn cos_copy_object(
-        &self,
-        from: &str,
-        to: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn cos_copy_object(&self, from: &str, to: &str) -> Result<Response<Buffer>> {
         let source = build_abs_path(&self.root, from);
         let target = build_abs_path(&self.root, to);
 
@@ -270,7 +327,7 @@ impl CosCore {
 
         let mut req = Request::put(&url)
             .header("x-cos-copy-source", &source)
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         self.sign(&mut req).await?;
@@ -284,7 +341,7 @@ impl CosCore {
         next_marker: &str,
         delimiter: &str,
         limit: Option<usize>,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let mut queries = vec![];
@@ -308,7 +365,7 @@ impl CosCore {
         };
 
         let mut req = Request::get(&url)
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         self.sign(&mut req).await?;
@@ -320,7 +377,7 @@ impl CosCore {
         &self,
         path: &str,
         args: &OpWrite,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!("{}/{}?uploads", self.endpoint, percent_encode_path(&p));
@@ -339,9 +396,14 @@ impl CosCore {
             req = req.header(CACHE_CONTROL, cache_control)
         }
 
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        // Set user metadata headers.
+        if let Some(user_metadata) = args.user_metadata() {
+            for (key, value) in user_metadata {
+                req = req.header(format!("x-cos-meta-{key}"), value)
+            }
+        }
+
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.sign(&mut req).await?;
 
@@ -354,8 +416,8 @@ impl CosCore {
         upload_id: &str,
         part_number: usize,
         size: u64,
-        body: AsyncBody,
-    ) -> Result<Response<IncomingAsyncBody>> {
+        body: Buffer,
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -381,7 +443,7 @@ impl CosCore {
         path: &str,
         upload_id: &str,
         parts: Vec<CompleteMultipartUploadRequestPart>,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -401,7 +463,7 @@ impl CosCore {
         let req = req.header(CONTENT_TYPE, "application/xml");
 
         let mut req = req
-            .body(AsyncBody::Bytes(Bytes::from(content)))
+            .body(Buffer::from(Bytes::from(content)))
             .map_err(new_request_build_error)?;
 
         self.sign(&mut req).await?;
@@ -414,7 +476,7 @@ impl CosCore {
         &self,
         path: &str,
         upload_id: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let p = build_abs_path(&self.root, path);
 
         let url = format!(
@@ -425,9 +487,53 @@ impl CosCore {
         );
 
         let mut req = Request::delete(&url)
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
         self.sign(&mut req).await?;
+        self.send(req).await
+    }
+
+    pub async fn cos_list_object_versions(
+        &self,
+        prefix: &str,
+        delimiter: &str,
+        limit: Option<usize>,
+        key_marker: &str,
+        version_id_marker: &str,
+    ) -> Result<Response<Buffer>> {
+        let p = build_abs_path(&self.root, prefix);
+
+        let mut url = format!("{}?versions", self.endpoint);
+        if !p.is_empty() {
+            write!(url, "&prefix={}", percent_encode_path(p.as_str()))
+                .expect("write into string must succeed");
+        }
+        if !delimiter.is_empty() {
+            write!(url, "&delimiter={}", delimiter).expect("write into string must succeed");
+        }
+
+        if let Some(limit) = limit {
+            write!(url, "&max-keys={}", limit).expect("write into string must succeed");
+        }
+        if !key_marker.is_empty() {
+            write!(url, "&key-marker={}", percent_encode_path(key_marker))
+                .expect("write into string must succeed");
+        }
+        if !version_id_marker.is_empty() {
+            write!(
+                url,
+                "&version-id-marker={}",
+                percent_encode_path(version_id_marker)
+            )
+            .expect("write into string must succeed");
+        }
+
+        let mut req = Request::get(&url)
+            .body(Buffer::new())
+            .map_err(new_request_build_error)?;
+
+        self.sign(&mut req).await?;
+
         self.send(req).await
     }
 }
@@ -468,7 +574,7 @@ pub struct CompleteMultipartUploadRequestPart {
     ///     etag: String,
     /// }
     ///
-    /// fn partial_escape<S>(s: &str, ser: S) -> std::result::Result<S::Ok, S::Error>
+    /// fn partial_escape<S>(s: &str, ser: S) -> Result<S::Ok, S::Error>
     /// where
     ///     S: serde::Serializer,
     /// {
@@ -505,6 +611,45 @@ pub struct CommonPrefix {
 pub struct ListObjectsOutputContent {
     pub key: String,
     pub size: u64,
+}
+
+#[derive(Default, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct OutputCommonPrefix {
+    pub prefix: String,
+}
+
+/// Output of ListObjectVersions
+#[derive(Default, Debug, Deserialize)]
+#[serde(default, rename_all = "PascalCase")]
+pub struct ListObjectVersionsOutput {
+    pub is_truncated: Option<bool>,
+    pub next_key_marker: Option<String>,
+    pub next_version_id_marker: Option<String>,
+    pub common_prefixes: Vec<OutputCommonPrefix>,
+    pub version: Vec<ListObjectVersionsOutputVersion>,
+    pub delete_marker: Vec<ListObjectVersionsOutputDeleteMarker>,
+}
+
+#[derive(Default, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListObjectVersionsOutputVersion {
+    pub key: String,
+    pub version_id: String,
+    pub is_latest: bool,
+    pub size: u64,
+    pub last_modified: String,
+    #[serde(rename = "ETag")]
+    pub etag: Option<String>,
+}
+
+#[derive(Default, Debug, Eq, PartialEq, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct ListObjectVersionsOutputDeleteMarker {
+    pub key: String,
+    pub version_id: String,
+    pub is_latest: bool,
+    pub last_modified: String,
 }
 
 #[cfg(test)]

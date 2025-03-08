@@ -2,7 +2,7 @@ package = "opendal"
 version = "0.1.0-1"
 
 source = {
-    url = "git+https://github.com/apache/incubator-opendal/",
+    url = "git+https://github.com/apache/opendal/",
 }
 
 description = {
@@ -16,7 +16,7 @@ description = {
 
 dependencies = {
     "lua >= 5.1",
-    "luarocks-build-rust-mlua",
+    "luarocks-build-rust-mlua = 0.2.0",
 }
 
 build = {
@@ -24,5 +24,5 @@ build = {
     modules = {
         ["opendal"] = "opendal_lua",
     },
-    target_path = "../../target",
+    target_path = "target",
 }

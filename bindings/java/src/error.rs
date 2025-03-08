@@ -57,9 +57,7 @@ impl Error {
             ErrorKind::RateLimited => "RateLimited",
             ErrorKind::IsSameFile => "IsSameFile",
             ErrorKind::ConditionNotMatch => "ConditionNotMatch",
-            ErrorKind::ContentTruncated => "ContentTruncated",
-            ErrorKind::ContentIncomplete => "ContentIncomplete",
-            ErrorKind::InvalidInput => "InvalidInput",
+            ErrorKind::RangeNotSatisfied => "RangeNotSatisfied",
             _ => "Unexpected",
         })?;
         let message = env.new_string(format!("{:?}", self.inner))?;
@@ -85,7 +83,7 @@ impl From<opendal::Error> for Error {
 
 impl From<jni::errors::Error> for Error {
     fn from(err: jni::errors::Error) -> Self {
-        opendal::Error::new(ErrorKind::Unexpected, &err.to_string()).into()
+        opendal::Error::new(ErrorKind::Unexpected, err.to_string()).into()
     }
 }
 

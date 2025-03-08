@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
+use bytes::Buf;
 use http::StatusCode;
 
 use super::core::parse_info;
@@ -43,17 +43,16 @@ impl ChainsafeLister {
     }
 }
 
-#[async_trait]
 impl oio::PageList for ChainsafeLister {
     async fn next_page(&self, ctx: &mut oio::PageContext) -> Result<()> {
         let resp = self.core.list_objects(&self.path).await?;
 
         match resp.status() {
             StatusCode::OK => {
-                let bs = resp.into_body().bytes().await?;
+                let bs = resp.into_body();
 
                 let output: Vec<Info> =
-                    serde_json::from_slice(&bs).map_err(new_json_deserialize_error)?;
+                    serde_json::from_reader(bs.reader()).map_err(new_json_deserialize_error)?;
 
                 for info in output {
                     let mut path = build_abs_path(&normalize_root(&self.path), &info.name);
@@ -71,7 +70,7 @@ impl oio::PageList for ChainsafeLister {
 
                 Ok(())
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 }

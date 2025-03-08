@@ -10,7 +10,6 @@ This service can be used to:
 - [ ] copy
 - [ ] rename
 - [x] list
-- [x] scan
 - [ ] presign
 - [ ] blocking
 
@@ -26,7 +25,7 @@ You can refer to [`ChainsafeBuilder`]'s docs for more information
 
 ### Via Builder
 
-```rust
+```rust,no_run
 use anyhow::Result;
 use opendal::services::Chainsafe;
 use opendal::Operator;
@@ -34,14 +33,13 @@ use opendal::Operator;
 #[tokio::main]
 async fn main() -> Result<()> {
     // create backend builder
-    let mut builder = Chainsafe::default();
-
-    // set the storage root for OpenDAL
-    builder.root("/");
-    // set the bucket_id for OpenDAL
-    builder.bucket_id("opendal");
-    // set the api_key for OpenDAL
-    builder.api_key("xxxxxxxxxxxxx");
+    let mut builder = Chainsafe::default()
+        // set the storage root for OpenDAL
+        .root("/")
+        // set the bucket_id for OpenDAL
+        .bucket_id("opendal")
+        // set the api_key for OpenDAL
+        .api_key("xxxxxxxxxxxxx");
 
     let op: Operator = Operator::new(builder)?.finish();
 

@@ -15,17 +15,20 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use std::io::Read;
+use std::io::Seek;
+
 use anyhow::Result;
-use od::raw::oio::BlockingRead;
 use opendal as od;
 
 use super::ffi;
 
-pub struct Reader(pub od::BlockingReader);
+pub struct Reader(pub od::StdReader);
 
 impl Reader {
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        Ok(self.0.read(buf)?)
+        let n = self.0.read(buf)?;
+        Ok(n)
     }
 
     pub fn seek(&mut self, offset: u64, dir: ffi::SeekFrom) -> Result<u64> {

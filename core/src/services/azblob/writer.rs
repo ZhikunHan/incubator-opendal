@@ -17,8 +17,8 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use http::StatusCode;
+use uuid::Uuid;
 
 use super::core::AzblobCore;
 use super::error::parse_error;
@@ -27,8 +27,7 @@ use crate::*;
 
 const X_MS_BLOB_TYPE: &str = "x-ms-blob-type";
 
-pub type AzblobWriters =
-    TwoWays<oio::OneShotWriter<AzblobWriter>, oio::AppendObjectWriter<AzblobWriter>>;
+pub type AzblobWriters = TwoWays<oio::BlockWriter<AzblobWriter>, oio::AppendWriter<AzblobWriter>>;
 
 pub struct AzblobWriter {
     core: Arc<AzblobCore>,
@@ -43,37 +42,7 @@ impl AzblobWriter {
     }
 }
 
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl oio::OneShotWrite for AzblobWriter {
-    async fn write_once(&self, bs: &dyn oio::WriteBuf) -> Result<()> {
-        let bs = oio::ChunkedBytes::from_vec(bs.vectored_bytes(bs.remaining()));
-        let mut req = self.core.azblob_put_blob_request(
-            &self.path,
-            Some(bs.len() as u64),
-            &self.op,
-            AsyncBody::ChunkedBytes(bs),
-        )?;
-
-        self.core.sign(&mut req).await?;
-
-        let resp = self.core.send(req).await?;
-
-        let status = resp.status();
-
-        match status {
-            StatusCode::CREATED | StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
-        }
-    }
-}
-
-#[cfg_attr(not(target_arch = "wasm32"), async_trait)]
-#[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
-impl oio::AppendObjectWrite for AzblobWriter {
+impl oio::AppendWrite for AzblobWriter {
     async fn offset(&self) -> Result<u64> {
         let resp = self
             .core
@@ -110,16 +79,16 @@ impl oio::AppendObjectWrite for AzblobWriter {
                         // do nothing
                     }
                     _ => {
-                        return Err(parse_error(resp).await?);
+                        return Err(parse_error(resp));
                     }
                 }
                 Ok(0)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    async fn append(&self, offset: u64, size: u64, body: AsyncBody) -> Result<()> {
+    async fn append(&self, offset: u64, size: u64, body: Buffer) -> Result<Metadata> {
         let mut req = self
             .core
             .azblob_append_blob_request(&self.path, offset, size, body)?;
@@ -130,11 +99,59 @@ impl oio::AppendObjectWrite for AzblobWriter {
 
         let status = resp.status();
         match status {
-            StatusCode::CREATED => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::CREATED => Ok(Metadata::default()),
+            _ => Err(parse_error(resp)),
         }
+    }
+}
+
+impl oio::BlockWrite for AzblobWriter {
+    async fn write_once(&self, size: u64, body: Buffer) -> Result<Metadata> {
+        let mut req: http::Request<Buffer> =
+            self.core
+                .azblob_put_blob_request(&self.path, Some(size), &self.op, body)?;
+        self.core.sign(&mut req).await?;
+
+        let resp = self.core.send(req).await?;
+
+        let status = resp.status();
+
+        match status {
+            StatusCode::CREATED | StatusCode::OK => Ok(Metadata::default()),
+            _ => Err(parse_error(resp)),
+        }
+    }
+
+    async fn write_block(&self, block_id: Uuid, size: u64, body: Buffer) -> Result<()> {
+        let resp = self
+            .core
+            .azblob_put_block(&self.path, block_id, Some(size), &self.op, body)
+            .await?;
+
+        let status = resp.status();
+        match status {
+            StatusCode::CREATED | StatusCode::OK => Ok(()),
+            _ => Err(parse_error(resp)),
+        }
+    }
+
+    async fn complete_block(&self, block_ids: Vec<Uuid>) -> Result<Metadata> {
+        let resp = self
+            .core
+            .azblob_complete_put_block_list(&self.path, block_ids, &self.op)
+            .await?;
+
+        let status = resp.status();
+        match status {
+            StatusCode::CREATED | StatusCode::OK => Ok(Metadata::default()),
+            _ => Err(parse_error(resp)),
+        }
+    }
+
+    async fn abort_block(&self, _block_ids: Vec<Uuid>) -> Result<()> {
+        // refer to https://learn.microsoft.com/en-us/rest/api/storageservices/put-block-list?tabs=microsoft-entra-id
+        // Any uncommitted blocks are garbage collected if there are no successful calls to Put Block or Put Block List on the blob within a week.
+        // If Put Blob is called on the blob, any uncommitted blocks are garbage collected.
+        Ok(())
     }
 }

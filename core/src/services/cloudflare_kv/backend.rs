@@ -15,11 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
-use async_trait::async_trait;
+use bytes::Buf;
 use http::header;
 use http::Request;
 use http::StatusCode;
@@ -28,104 +27,99 @@ use serde::Deserialize;
 use super::error::parse_error;
 use crate::raw::adapters::kv;
 use crate::raw::*;
+use crate::services::CloudflareKvConfig;
 use crate::ErrorKind;
 use crate::*;
+
+impl Configurator for CloudflareKvConfig {
+    type Builder = CloudflareKvBuilder;
+    fn into_builder(self) -> Self::Builder {
+        CloudflareKvBuilder {
+            config: self,
+            http_client: None,
+        }
+    }
+}
 
 #[doc = include_str!("docs.md")]
 #[derive(Default)]
 pub struct CloudflareKvBuilder {
-    /// The token used to authenticate with CloudFlare.
-    token: Option<String>,
-    /// The account ID used to authenticate with CloudFlare. Used as URI path parameter.
-    account_id: Option<String>,
-    /// The namespace ID. Used as URI path parameter.
-    namespace_id: Option<String>,
+    config: CloudflareKvConfig,
 
     /// The HTTP client used to communicate with CloudFlare.
     http_client: Option<HttpClient>,
-    /// Root within this backend.
-    root: Option<String>,
 }
 
 impl Debug for CloudflareKvBuilder {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CloudFlareKvBuilder")
-            .field("account_id", &self.account_id)
-            .field("namespace_id", &self.namespace_id)
-            .field("root", &self.root)
+            .field("config", &self.config)
             .finish()
     }
 }
 
 impl CloudflareKvBuilder {
     /// Set the token used to authenticate with CloudFlare.
-    pub fn token(&mut self, token: &str) -> &mut Self {
+    pub fn token(mut self, token: &str) -> Self {
         if !token.is_empty() {
-            self.token = Some(token.to_string())
+            self.config.token = Some(token.to_string())
         }
         self
     }
 
     /// Set the account ID used to authenticate with CloudFlare.
-    pub fn account_id(&mut self, account_id: &str) -> &mut Self {
+    pub fn account_id(mut self, account_id: &str) -> Self {
         if !account_id.is_empty() {
-            self.account_id = Some(account_id.to_string())
+            self.config.account_id = Some(account_id.to_string())
         }
         self
     }
 
     /// Set the namespace ID.
-    pub fn namespace_id(&mut self, namespace_id: &str) -> &mut Self {
+    pub fn namespace_id(mut self, namespace_id: &str) -> Self {
         if !namespace_id.is_empty() {
-            self.namespace_id = Some(namespace_id.to_string())
+            self.config.namespace_id = Some(namespace_id.to_string())
         }
         self
     }
 
     /// Set the root within this backend.
-    pub fn root(&mut self, root: &str) -> &mut Self {
-        if !root.is_empty() {
-            self.root = Some(root.to_string())
-        }
+    pub fn root(mut self, root: &str) -> Self {
+        self.config.root = if root.is_empty() {
+            None
+        } else {
+            Some(root.to_string())
+        };
+
         self
     }
 }
 
 impl Builder for CloudflareKvBuilder {
     const SCHEME: Scheme = Scheme::CloudflareKv;
+    type Config = CloudflareKvConfig;
 
-    type Accessor = CloudflareKvBackend;
-
-    fn from_map(map: HashMap<String, String>) -> Self {
-        let mut builder = Self::default();
-        map.get("token").map(|v| builder.token(v));
-        map.get("account_id").map(|v| builder.account_id(v));
-        map.get("namespace_id").map(|v| builder.namespace_id(v));
-        map.get("root").map(|v| builder.root(v));
-        builder
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
-        let authorization = match &self.token {
+    fn build(self) -> Result<impl Access> {
+        let authorization = match &self.config.token {
             Some(token) => format_authorization_by_bearer(token)?,
             None => return Err(Error::new(ErrorKind::ConfigInvalid, "token is required")),
         };
 
-        let Some(account_id) = self.account_id.clone() else {
+        let Some(account_id) = self.config.account_id.clone() else {
             return Err(Error::new(
                 ErrorKind::ConfigInvalid,
                 "account_id is required",
             ));
         };
 
-        let Some(namespace_id) = self.namespace_id.clone() else {
+        let Some(namespace_id) = self.config.namespace_id.clone() else {
             return Err(Error::new(
                 ErrorKind::ConfigInvalid,
                 "namespace_id is required",
             ));
         };
 
-        let client = if let Some(client) = self.http_client.take() {
+        let client = if let Some(client) = self.http_client {
             client
         } else {
             HttpClient::new().map_err(|err| {
@@ -135,7 +129,8 @@ impl Builder for CloudflareKvBuilder {
         };
 
         let root = normalize_root(
-            self.root
+            self.config
+                .root
                 .clone()
                 .unwrap_or_else(|| "/".to_string())
                 .as_str(),
@@ -146,14 +141,14 @@ impl Builder for CloudflareKvBuilder {
             account_id, namespace_id
         );
 
-        Ok(kv::Backend::new(Adapter {
+        Ok(CloudflareKvBackend::new(Adapter {
             authorization,
             account_id,
             namespace_id,
             client,
             url_prefix,
         })
-        .with_root(&root))
+        .with_normalized_root(root))
     }
 }
 
@@ -185,42 +180,39 @@ impl Adapter {
     }
 }
 
-#[async_trait]
 impl kv::Adapter for Adapter {
-    fn metadata(&self) -> kv::Metadata {
-        kv::Metadata::new(
+    type Scanner = kv::Scanner;
+
+    fn info(&self) -> kv::Info {
+        kv::Info::new(
             Scheme::CloudflareKv,
             &self.namespace_id,
             Capability {
                 read: true,
                 write: true,
                 list: true,
+                shared: true,
 
                 ..Default::default()
             },
         )
     }
 
-    async fn get(&self, path: &str) -> Result<Option<Vec<u8>>> {
+    async fn get(&self, path: &str) -> Result<Option<Buffer>> {
         let url = format!("{}/values/{}", self.url_prefix, path);
         let mut req = Request::get(&url);
         req = req.header(header::CONTENT_TYPE, "application/json");
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         req = self.sign(req)?;
         let resp = self.client.send(req).await?;
         let status = resp.status();
         match status {
-            StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
-                Ok(Some(body.into()))
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(Some(resp.into_body())),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    async fn set(&self, path: &str, value: &[u8]) -> Result<()> {
+    async fn set(&self, path: &str, value: Buffer) -> Result<()> {
         let url = format!("{}/values/{}", self.url_prefix, path);
         let req = Request::put(&url);
         let multipart = Multipart::new();
@@ -233,7 +225,7 @@ impl kv::Adapter for Adapter {
         let status = resp.status();
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -241,54 +233,53 @@ impl kv::Adapter for Adapter {
         let url = format!("{}/values/{}", self.url_prefix, path);
         let mut req = Request::delete(&url);
         req = req.header(header::CONTENT_TYPE, "application/json");
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         req = self.sign(req)?;
         let resp = self.client.send(req).await?;
         let status = resp.status();
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    async fn scan(&self, path: &str) -> Result<Vec<String>> {
+    async fn scan(&self, path: &str) -> Result<Self::Scanner> {
         let mut url = format!("{}/keys", self.url_prefix);
         if !path.is_empty() {
             url = format!("{}?prefix={}", url, path);
         }
         let mut req = Request::get(&url);
         req = req.header(header::CONTENT_TYPE, "application/json");
-        let mut req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let mut req = req.body(Buffer::new()).map_err(new_request_build_error)?;
         req = self.sign(req)?;
         let resp = self.client.send(req).await?;
         let status = resp.status();
         match status {
             StatusCode::OK => {
-                let body = resp.into_body().bytes().await?;
-                let response: CfKvScanResponse = serde_json::from_slice(&body).map_err(|e| {
-                    Error::new(
-                        crate::ErrorKind::Unexpected,
-                        &format!("failed to parse error response: {}", e),
-                    )
-                })?;
-                Ok(response.result.into_iter().map(|r| r.name).collect())
+                let body = resp.into_body();
+                let response: CfKvScanResponse =
+                    serde_json::from_reader(body.reader()).map_err(|e| {
+                        Error::new(
+                            ErrorKind::Unexpected,
+                            format!("failed to parse error response: {}", e),
+                        )
+                    })?;
+                Ok(Box::new(kv::ScanStdIter::new(
+                    response.result.into_iter().map(|r| Ok(r.name)),
+                )))
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct CfKvResponse {
-    pub(crate) errors: Vec<CfKvError>,
+pub(super) struct CfKvResponse {
+    pub(super) errors: Vec<CfKvError>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct CfKvScanResponse {
+pub(super) struct CfKvScanResponse {
     result: Vec<CfKvScanResult>,
     // According to https://developers.cloudflare.com/api/operations/workers-kv-namespace-list-a-namespace'-s-keys, result_info is used to determine if there are more keys to be listed
     // result_info: Option<CfKvResultInfo>,
@@ -306,8 +297,8 @@ struct CfKvScanResult {
 // }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct CfKvError {
-    pub(crate) code: i32,
+pub(super) struct CfKvError {
+    pub(super) code: i32,
 }
 
 #[cfg(test)]

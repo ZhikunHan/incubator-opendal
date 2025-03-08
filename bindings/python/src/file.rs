@@ -15,9 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-// Remove this allow after <https://github.com/rust-lang/rust-clippy/issues/12039> fixed.
+// Remove this `allow` after <https://github.com/rust-lang/rust-clippy/issues/12039> fixed.
 #![allow(clippy::unnecessary_fallible_conversions)]
 
+use std::io::BufRead;
 use std::io::Read;
 use std::io::Seek;
 use std::io::SeekFrom;
@@ -27,11 +28,12 @@ use std::sync::Arc;
 
 use futures::AsyncReadExt;
 use futures::AsyncSeekExt;
-use futures::AsyncWriteExt;
+use pyo3::buffer::PyBuffer;
 use pyo3::exceptions::PyIOError;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use pyo3_asyncio::tokio::future_into_py;
+use pyo3::IntoPyObjectExt;
+use pyo3_async_runtimes::tokio::future_into_py;
 use tokio::sync::Mutex;
 
 use crate::*;
@@ -42,26 +44,30 @@ use crate::*;
 pub struct File(FileState);
 
 enum FileState {
-    Reader(ocore::BlockingReader),
-    Writer(ocore::BlockingWriter),
+    Reader(ocore::StdReader),
+    Writer(ocore::StdWriter),
     Closed,
 }
 
 impl File {
-    pub fn new_reader(reader: ocore::BlockingReader) -> Self {
+    pub fn new_reader(reader: ocore::StdReader) -> Self {
         Self(FileState::Reader(reader))
     }
 
     pub fn new_writer(writer: ocore::BlockingWriter) -> Self {
-        Self(FileState::Writer(writer))
+        Self(FileState::Writer(writer.into_std_write()))
     }
 }
 
 #[pymethods]
 impl File {
-    /// Read and return size bytes, or if size is not given, until EOF.
+    /// Read and return at most size bytes, or if size is not given, until EOF.
     #[pyo3(signature = (size=None,))]
-    pub fn read<'p>(&'p mut self, py: Python<'p>, size: Option<usize>) -> PyResult<&'p PyAny> {
+    pub fn read<'p>(
+        &'p mut self,
+        py: Python<'p>,
+        size: Option<usize>,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let reader = match &mut self.0 {
             FileState::Reader(r) => r,
             FileState::Writer(_) => {
@@ -78,11 +84,12 @@ impl File {
 
         let buffer = match size {
             Some(size) => {
-                let mut buffer = vec![0; size];
-                reader
-                    .read_exact(&mut buffer)
+                let mut bs = vec![0; size];
+                let n = reader
+                    .read(&mut bs)
                     .map_err(|err| PyIOError::new_err(err.to_string()))?;
-                buffer
+                bs.truncate(n);
+                bs
             }
             None => {
                 let mut buffer = Vec::new();
@@ -93,11 +100,91 @@ impl File {
             }
         };
 
-        Buffer::new(buffer).into_memory_view_ref(py)
+        Buffer::new(buffer).into_bytes_ref(py)
+    }
+
+    /// Read a single line from the file.
+    /// A newline character (`\n`) is left at the end of the string, and is only omitted on the last line of the file if the file doesn’t end in a newline.
+    /// If size is specified, at most size bytes will be read.
+    #[pyo3(signature = (size=None,))]
+    pub fn readline<'p>(
+        &'p mut self,
+        py: Python<'p>,
+        size: Option<usize>,
+    ) -> PyResult<Bound<'p, PyAny>> {
+        let reader = match &mut self.0 {
+            FileState::Reader(r) => r,
+            FileState::Writer(_) => {
+                return Err(PyIOError::new_err(
+                    "I/O operation failed for reading on write only file.",
+                ));
+            }
+            FileState::Closed => {
+                return Err(PyIOError::new_err(
+                    "I/O operation failed for reading on closed file.",
+                ));
+            }
+        };
+
+        let buffer = match size {
+            None => {
+                let mut buffer = Vec::new();
+                reader
+                    .read_until(b'\n', &mut buffer)
+                    .map_err(|err| PyIOError::new_err(err.to_string()))?;
+                buffer
+            }
+            Some(size) => {
+                let mut bs = vec![0; size];
+                let mut reader = reader.take(size as u64);
+                let n = reader
+                    .read_until(b'\n', &mut bs)
+                    .map_err(|err| PyIOError::new_err(err.to_string()))?;
+                bs.truncate(n);
+                bs
+            }
+        };
+
+        Buffer::new(buffer).into_bytes_ref(py)
+    }
+
+    /// Read bytes into a pre-allocated, writable buffer
+    pub fn readinto(&mut self, buffer: PyBuffer<u8>) -> PyResult<usize> {
+        let reader = match &mut self.0 {
+            FileState::Reader(r) => r,
+            FileState::Writer(_) => {
+                return Err(PyIOError::new_err(
+                    "I/O operation failed for reading on write only file.",
+                ));
+            }
+            FileState::Closed => {
+                return Err(PyIOError::new_err(
+                    "I/O operation failed for reading on closed file.",
+                ));
+            }
+        };
+
+        if buffer.readonly() {
+            return Err(PyIOError::new_err("Buffer is not writable."));
+        }
+
+        if !buffer.is_c_contiguous() {
+            return Err(PyIOError::new_err("Buffer is not C contiguous."));
+        }
+
+        Python::with_gil(|_py| {
+            let ptr = buffer.buf_ptr();
+            let nbytes = buffer.len_bytes();
+            unsafe {
+                let view: &mut [u8] = std::slice::from_raw_parts_mut(ptr as *mut u8, nbytes);
+                let z = Read::read(reader, view)?;
+                Ok(z)
+            }
+        })
     }
 
     /// Write bytes into the file.
-    pub fn write(&mut self, bs: &[u8]) -> PyResult<()> {
+    pub fn write(&mut self, bs: &[u8]) -> PyResult<usize> {
         let writer = match &mut self.0 {
             FileState::Reader(_) => {
                 return Err(PyIOError::new_err(
@@ -114,11 +201,12 @@ impl File {
 
         writer
             .write_all(bs)
+            .map(|_| bs.len())
             .map_err(|err| PyIOError::new_err(err.to_string()))
     }
 
     /// Change the stream position to the given byte offset.
-    /// offset is interpreted relative to the position indicated by `whence`.
+    /// Offset is interpreted relative to the position indicated by `whence`.
     /// The default value for whence is `SEEK_SET`. Values for `whence` are:
     ///
     /// * `SEEK_SET` or `0` – start of the stream (the default); offset should be zero or positive
@@ -128,6 +216,11 @@ impl File {
     /// Return the new absolute position.
     #[pyo3(signature = (pos, whence = 0))]
     pub fn seek(&mut self, pos: i64, whence: u8) -> PyResult<u64> {
+        if !self.seekable()? {
+            return Err(PyIOError::new_err(
+                "Seek operation is not supported by the backing service.",
+            ));
+        }
         let reader = match &mut self.0 {
             FileState::Reader(r) => r,
             FileState::Writer(_) => {
@@ -176,6 +269,10 @@ impl File {
     }
 
     fn close(&mut self) -> PyResult<()> {
+        if let FileState::Writer(w) = &mut self.0 {
+            w.close()
+                .map_err(|err| PyIOError::new_err(err.to_string()))?;
+        };
         self.0 = FileState::Closed;
         Ok(())
     }
@@ -184,8 +281,53 @@ impl File {
         slf
     }
 
-    pub fn __exit__(&mut self, _exc_type: PyObject, _exc_value: PyObject, _traceback: PyObject) {
-        self.0 = FileState::Closed;
+    pub fn __exit__(
+        &mut self,
+        _exc_type: PyObject,
+        _exc_value: PyObject,
+        _traceback: PyObject,
+    ) -> PyResult<()> {
+        self.close()
+    }
+
+    /// Flush the underlying writer. Is a no-op if the file is opened in reading mode.
+    pub fn flush(&mut self) -> PyResult<()> {
+        if matches!(self.0, FileState::Reader(_)) {
+            Ok(())
+        } else if let FileState::Writer(w) = &mut self.0 {
+            match w.flush() {
+                Ok(_) => Ok(()),
+                Err(e) => Err(e.into()),
+            }
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Return True if the stream can be read from.
+    pub fn readable(&self) -> PyResult<bool> {
+        Ok(matches!(self.0, FileState::Reader(_)))
+    }
+
+    /// Return True if the stream can be written to.
+    pub fn writable(&self) -> PyResult<bool> {
+        Ok(matches!(self.0, FileState::Writer(_)))
+    }
+
+    /// Return True if the stream can be repositioned.
+    ///
+    /// In OpenDAL this is limited to only *readable* streams.
+    pub fn seekable(&self) -> PyResult<bool> {
+        match &self.0 {
+            FileState::Reader(_) => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    /// Return True if the stream is closed.
+    #[getter]
+    pub fn closed(&self) -> PyResult<bool> {
+        Ok(matches!(self.0, FileState::Closed))
     }
 }
 
@@ -195,13 +337,13 @@ impl File {
 pub struct AsyncFile(Arc<Mutex<AsyncFileState>>);
 
 enum AsyncFileState {
-    Reader(ocore::Reader),
+    Reader(ocore::FuturesAsyncReader),
     Writer(ocore::Writer),
     Closed,
 }
 
 impl AsyncFile {
-    pub fn new_reader(reader: ocore::Reader) -> Self {
+    pub fn new_reader(reader: ocore::FuturesAsyncReader) -> Self {
         Self(Arc::new(Mutex::new(AsyncFileState::Reader(reader))))
     }
 
@@ -212,8 +354,9 @@ impl AsyncFile {
 
 #[pymethods]
 impl AsyncFile {
-    /// Read and return size bytes, or if size is not given, until EOF.
-    pub fn read<'p>(&'p self, py: Python<'p>, size: Option<usize>) -> PyResult<&'p PyAny> {
+    /// Read and return at most size bytes, or if size is not given, until EOF.
+    #[pyo3(signature = (size=None))]
+    pub fn read<'p>(&'p self, py: Python<'p>, size: Option<usize>) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
 
         future_into_py(py, async move {
@@ -234,12 +377,14 @@ impl AsyncFile {
 
             let buffer = match size {
                 Some(size) => {
-                    let mut buffer = vec![0; size];
-                    reader
-                        .read_exact(&mut buffer)
+                    // TODO: optimize here by using uninit slice.
+                    let mut bs = vec![0; size];
+                    let n = reader
+                        .read(&mut bs)
                         .await
                         .map_err(|err| PyIOError::new_err(err.to_string()))?;
-                    buffer
+                    bs.truncate(n);
+                    bs
                 }
                 None => {
                     let mut buffer = Vec::new();
@@ -251,12 +396,12 @@ impl AsyncFile {
                 }
             };
 
-            Python::with_gil(|py| Buffer::new(buffer).into_memory_view(py))
+            Python::with_gil(|py| Buffer::new(buffer).into_bytes(py))
         })
     }
 
     /// Write bytes into the file.
-    pub fn write<'p>(&'p mut self, py: Python<'p>, bs: &'p [u8]) -> PyResult<&'p PyAny> {
+    pub fn write<'p>(&'p mut self, py: Python<'p>, bs: &'p [u8]) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
 
         // FIXME: can we avoid this clone?
@@ -278,9 +423,11 @@ impl AsyncFile {
                 }
             };
 
+            let len = bs.len();
             writer
-                .write_all(&bs)
+                .write(bs)
                 .await
+                .map(|_| len)
                 .map_err(|err| PyIOError::new_err(err.to_string()))
         })
     }
@@ -295,7 +442,12 @@ impl AsyncFile {
     ///
     /// Return the new absolute position.
     #[pyo3(signature = (pos, whence = 0))]
-    pub fn seek<'p>(&'p mut self, py: Python<'p>, pos: i64, whence: u8) -> PyResult<&'p PyAny> {
+    pub fn seek<'p>(
+        &'p mut self,
+        py: Python<'p>,
+        pos: i64,
+        whence: u8,
+    ) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
 
         let whence = match whence {
@@ -321,16 +473,17 @@ impl AsyncFile {
                 }
             };
 
-            let ret = reader
+            let pos = reader
                 .seek(whence)
                 .await
                 .map_err(|err| PyIOError::new_err(err.to_string()))?;
-            Ok(Python::with_gil(|py| ret.into_py(py)))
+            Ok(pos)
         })
+        .and_then(|pos| pos.into_bound_py_any(py))
     }
 
     /// Return the current stream position.
-    pub fn tell<'p>(&'p mut self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    pub fn tell<'p>(&'p mut self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
 
         future_into_py(py, async move {
@@ -353,36 +506,74 @@ impl AsyncFile {
                 .stream_position()
                 .await
                 .map_err(|err| PyIOError::new_err(err.to_string()))?;
-            Ok(Python::with_gil(|py| pos.into_py(py)))
+            Ok(pos)
         })
+        .and_then(|pos| pos.into_bound_py_any(py))
     }
 
-    fn close<'p>(&'p mut self, py: Python<'p>) -> PyResult<&'p PyAny> {
+    fn close<'p>(&'p mut self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
         future_into_py(py, async move {
             let mut state = state.lock().await;
+            if let AsyncFileState::Writer(w) = &mut *state {
+                w.close()
+                    .await
+                    .map_err(|err| PyIOError::new_err(err.to_string()))?;
+            }
             *state = AsyncFileState::Closed;
             Ok(())
         })
     }
 
-    fn __aenter__<'a>(slf: PyRef<'a, Self>, py: Python<'a>) -> PyResult<&'a PyAny> {
-        let slf = slf.into_py(py);
+    fn __aenter__<'a>(slf: PyRef<'a, Self>, py: Python<'a>) -> PyResult<Bound<'a, PyAny>> {
+        let slf = slf.into_py_any(py)?;
         future_into_py(py, async move { Ok(slf) })
     }
 
     fn __aexit__<'a>(
-        &self,
+        &'a mut self,
         py: Python<'a>,
-        _exc_type: &'a PyAny,
-        _exc_value: &'a PyAny,
-        _traceback: &'a PyAny,
-    ) -> PyResult<&'a PyAny> {
+        _exc_type: &Bound<'a, PyAny>,
+        _exc_value: &Bound<'a, PyAny>,
+        _traceback: &Bound<'a, PyAny>,
+    ) -> PyResult<Bound<'a, PyAny>> {
+        self.close(py)
+    }
+
+    /// Check if the stream may be read from.
+    pub fn readable<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
         let state = self.0.clone();
         future_into_py(py, async move {
-            let mut state = state.lock().await;
-            *state = AsyncFileState::Closed;
-            Ok(())
+            let state = state.lock().await;
+            Ok(matches!(*state, AsyncFileState::Reader(_)))
+        })
+    }
+
+    /// Check if the stream may be written to.
+    pub fn writable<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let state = self.0.clone();
+        future_into_py(py, async move {
+            let state = state.lock().await;
+            Ok(matches!(*state, AsyncFileState::Writer(_)))
+        })
+    }
+
+    /// Check if the stream reader may be re-located.
+    pub fn seekable<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        if true {
+            self.readable(py)
+        } else {
+            future_into_py(py, async move { Ok(false) })
+        }
+    }
+
+    /// Check if the stream is closed.
+    #[getter]
+    pub fn closed<'p>(&'p self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
+        let state = self.0.clone();
+        future_into_py(py, async move {
+            let state = state.lock().await;
+            Ok(matches!(*state, AsyncFileState::Closed))
         })
     }
 }

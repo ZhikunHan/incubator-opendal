@@ -4,7 +4,7 @@
 [![npm](https://img.shields.io/npm/v/opendal.svg?logo=npm)](https://www.npmjs.com/package/opendal)
 [![Website](https://img.shields.io/badge/opendal-OpenDAL_Website-red?logo=Apache&logoColor=red)](https://opendal.apache.org/docs/nodejs/)
 
-![](https://github.com/apache/incubator-opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
+![](https://github.com/apache/opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
 
 ## Installation
 
@@ -14,7 +14,36 @@ npm install opendal
 
 ## Docs
 
-See our documentations on [opendal.apache.org](https://opendal.apache.org/docs/nodejs/).
+See our documentation on [opendal.apache.org](https://opendal.apache.org/docs/nodejs/).
+
+To build the docs locally, please run the following commands:
+
+```shell
+# Only need to run once unless you want to update the docs theme
+pnpm run build:theme
+
+# Build the docs
+pnpm run docs
+```
+
+## Tests
+
+Services behavior tests read necessary configs from env vars or the `.env` file.
+
+You can copy [.env.example](/.env.example) to `$(pwd)/.env` and change the values on need, or directly set env vars with `export KEY=VALUE`.
+
+Take `fs` for example, we need to enable bench on `fs` on `/tmp`:
+
+```properties
+OPENDAL_TEST=fs
+OPENDAL_FS_ROOT=/tmp
+```
+
+You can run service behavior tests of enabled with the following command:
+
+```shell
+pnpm build && pnpm test
+```
 
 ## Usage
 
@@ -35,11 +64,13 @@ main();
 
 ## Contributing
 
-- Start with [Contributing Guide](https://github.com/apache/incubator-opendal/blob/main/bindings/nodejs/CONTRIBUTING.md).
-- Submit [Issues](https://github.com/apache/incubator-opendal/issues/new) for bug report or feature requests.
-- Asking questions in the [Discussions](https://github.com/apache/incubator-opendal/discussions/new?category=q-a).
-- Talk to community at [Discord](https://discord.gg/XQy8yGR2dg).
+- Start with [Contributing Guide](CONTRIBUTING.md).
+- Submit [Issues](https://github.com/apache/opendal/issues/new) for bug report or feature requests.
+- Asking questions in the [Discussions](https://github.com/apache/opendal/discussions/new?category=q-a).
+  - Talk to community at [Discord](https://opendal.apache.org/discord).
 
-## License
+## License and Trademarks
 
 Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
+
+Apache OpenDAL, OpenDAL, and Apache are either registered trademarks or trademarks of the Apache Software Foundation.

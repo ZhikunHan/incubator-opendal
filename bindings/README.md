@@ -13,6 +13,7 @@ This folder contains the bindings for OpenDAL. Currently, we support the followi
 * [C](c/README.md)
 * [C++](cpp/README.md)
 * [C#](dotnet/README.md)
+* [D](d/README.md)
 * [Go](go/README.md)
 * [Haskell](haskell/README.md)
 * [Lua](lua/README.md)
@@ -38,4 +39,4 @@ Please refer to the bindings listed above or which are already released for more
 
 ## Contributing
 
-We welcome contributions to OpenDAL. Please refer to [CONTRIBUTING.md](../../CONTRIBUTING.md) for the contributing guidelines.
+We welcome contributions to OpenDAL. Please refer to [CONTRIBUTING.md](../CONTRIBUTING.md) for the contributing guidelines.

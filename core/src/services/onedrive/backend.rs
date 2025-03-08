@@ -16,14 +16,16 @@
 // under the License.
 
 use std::fmt::Debug;
+use std::sync::Arc;
 
-use async_trait::async_trait;
+use bytes::Buf;
 use bytes::Bytes;
 use http::header;
 use http::Request;
 use http::Response;
 use http::StatusCode;
 
+use super::delete::OnedriveDeleter;
 use super::error::parse_error;
 use super::graph_model::CreateDirPayload;
 use super::graph_model::ItemType;
@@ -36,6 +38,7 @@ use crate::*;
 
 #[derive(Clone)]
 pub struct OnedriveBackend {
+    info: Arc<AccessorInfo>,
     root: String,
     access_token: String,
     client: HttpClient,
@@ -44,6 +47,29 @@ pub struct OnedriveBackend {
 impl OnedriveBackend {
     pub(crate) fn new(root: String, access_token: String, http_client: HttpClient) -> Self {
         Self {
+            info: {
+                let ma = AccessorInfo::default();
+                ma.set_scheme(Scheme::Onedrive)
+                    .set_root(&root)
+                    .set_native_capability(Capability {
+                        read: true,
+                        write: true,
+                        stat: true,
+                        stat_has_etag: true,
+                        stat_has_last_modified: true,
+                        stat_has_content_length: true,
+                        delete: true,
+                        create_dir: true,
+                        list: true,
+                        list_has_content_length: true,
+                        list_has_etag: true,
+                        list_has_last_modified: true,
+                        shared: true,
+                        ..Default::default()
+                    });
+
+                ma.into()
+            },
             root,
             access_token,
             client: http_client,
@@ -60,33 +86,26 @@ impl Debug for OnedriveBackend {
     }
 }
 
-#[async_trait]
-impl Accessor for OnedriveBackend {
-    type Reader = IncomingAsyncBody;
+impl Access for OnedriveBackend {
+    type Reader = HttpBody;
     type Writer = oio::OneShotWriter<OneDriveWriter>;
     type Lister = oio::PageLister<OnedriveLister>;
+    type Deleter = oio::OneShotDeleter<OnedriveDeleter>;
     type BlockingReader = ();
     type BlockingWriter = ();
     type BlockingLister = ();
+    type BlockingDeleter = ();
 
-    fn info(&self) -> AccessorInfo {
-        let mut ma = AccessorInfo::default();
-        ma.set_scheme(Scheme::Onedrive)
-            .set_root(&self.root)
-            .set_native_capability(Capability {
-                read: true,
-                write: true,
-                stat: true,
-                delete: true,
-                create_dir: true,
-                list: true,
-                ..Default::default()
-            });
-
-        ma
+    fn info(&self) -> Arc<AccessorInfo> {
+        self.info.clone()
     }
 
     async fn create_dir(&self, path: &str, _: OpCreateDir) -> Result<RpCreateDir> {
+        if path == "/" {
+            // skip, the root path exists in the personal OneDrive.
+            return Ok(RpCreateDir::default());
+        }
+
         let path = build_rooted_abs_path(&self.root, path);
         let path_before_last_slash = get_parent(&path);
         let encoded_path = percent_encode_path(path_before_last_slash);
@@ -106,7 +125,7 @@ impl Accessor for OnedriveBackend {
         let status = response.status();
         match status {
             StatusCode::CREATED | StatusCode::OK => Ok(RpCreateDir::default()),
-            _ => Err(parse_error(response).await?),
+            _ => Err(parse_error(response)),
         }
     }
 
@@ -120,9 +139,9 @@ impl Accessor for OnedriveBackend {
         let status = resp.status();
 
         if status.is_success() {
-            let bytes = resp.into_body().bytes().await?;
-            let decoded_response = serde_json::from_slice::<OnedriveGetItemBody>(&bytes)
-                .map_err(new_json_deserialize_error)?;
+            let bytes = resp.into_body();
+            let decoded_response: OnedriveGetItemBody =
+                serde_json::from_reader(bytes.reader()).map_err(new_json_deserialize_error)?;
 
             let entry_mode: EntryMode = match decoded_response.item_type {
                 ItemType::Folder { .. } => EntryMode::DIR,
@@ -140,30 +159,24 @@ impl Accessor for OnedriveBackend {
 
             Ok(RpStat::new(meta))
         } else {
-            match status {
-                StatusCode::NOT_FOUND if path.ends_with('/') => {
-                    Ok(RpStat::new(Metadata::new(EntryMode::DIR)))
-                }
-                _ => Err(parse_error(resp).await?),
-            }
+            Err(parse_error(resp))
         }
     }
 
-    async fn read(&self, path: &str, _args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let resp = self.onedrive_get_content(path).await?;
+    async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
+        let resp = self.onedrive_get_content(path, args.range()).await?;
 
         let status = resp.status();
 
         match status {
             StatusCode::OK | StatusCode::PARTIAL_CONTENT => {
-                let size = parse_content_length(resp.headers())?;
-                let range = parse_content_range(resp.headers())?;
-                Ok((
-                    RpRead::new().with_size(size).with_range(range),
-                    resp.into_body(),
-                ))
+                Ok((RpRead::default(), resp.into_body()))
             }
-            _ => Err(parse_error(resp).await?),
+            _ => {
+                let (part, mut body) = resp.into_parts();
+                let buf = body.to_buffer().await?;
+                Err(parse_error(Response::from_parts(part, buf)))
+            }
         }
     }
 
@@ -176,17 +189,11 @@ impl Accessor for OnedriveBackend {
         ))
     }
 
-    /// Delete operation
-    /// Documentation: https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_delete?view=odsp-graph-online
-    async fn delete(&self, path: &str, _: OpDelete) -> Result<RpDelete> {
-        let resp = self.onedrive_delete(path).await?;
-
-        let status = resp.status();
-
-        match status {
-            StatusCode::NO_CONTENT | StatusCode::NOT_FOUND => Ok(RpDelete::default()),
-            _ => Err(parse_error(resp).await?),
-        }
+    async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
+        Ok((
+            RpDelete::default(),
+            oio::OneShotDeleter::new(OnedriveDeleter::new(Arc::new(self.clone()))),
+        ))
     }
 
     async fn list(&self, path: &str, _op_list: OpList) -> Result<(RpList, Self::Lister)> {
@@ -199,7 +206,7 @@ impl Accessor for OnedriveBackend {
 impl OnedriveBackend {
     pub(crate) const BASE_URL: &'static str = "https://graph.microsoft.com/v1.0/me";
 
-    async fn onedrive_get_stat(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    async fn onedrive_get_stat(&self, path: &str) -> Result<Response<Buffer>> {
         let path = build_rooted_abs_path(&self.root, path);
         let url: String = format!(
             "https://graph.microsoft.com/v1.0/me/drive/root:{}{}",
@@ -212,30 +219,27 @@ impl OnedriveBackend {
         let auth_header_content = format!("Bearer {}", self.access_token);
         req = req.header(header::AUTHORIZATION, auth_header_content);
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }
 
-    pub(crate) async fn onedrive_get_next_list_page(
-        &self,
-        url: &str,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    pub(crate) async fn onedrive_get_next_list_page(&self, url: &str) -> Result<Response<Buffer>> {
         let mut req = Request::get(url);
 
         let auth_header_content = format!("Bearer {}", self.access_token);
         req = req.header(header::AUTHORIZATION, auth_header_content);
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }
 
-    async fn onedrive_get_content(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn onedrive_get_content(
+        &self,
+        path: &str,
+        range: BytesRange,
+    ) -> Result<Response<HttpBody>> {
         let path = build_rooted_abs_path(&self.root, path);
         let url: String = format!(
             "https://graph.microsoft.com/v1.0/me/drive/root:{}{}",
@@ -243,16 +247,14 @@ impl OnedriveBackend {
             ":/content"
         );
 
-        let mut req = Request::get(&url);
+        let mut req = Request::get(&url).header(header::RANGE, range.to_header());
 
         let auth_header_content = format!("Bearer {}", self.access_token);
         req = req.header(header::AUTHORIZATION, auth_header_content);
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
-        self.client.send(req).await
+        self.client.fetch(req).await
     }
 
     pub async fn onedrive_upload_simple(
@@ -260,8 +262,8 @@ impl OnedriveBackend {
         path: &str,
         size: Option<usize>,
         args: &OpWrite,
-        body: AsyncBody,
-    ) -> Result<Response<IncomingAsyncBody>> {
+        body: Buffer,
+    ) -> Result<Response<Buffer>> {
         let url = format!(
             "https://graph.microsoft.com/v1.0/me/drive/root:{}:/content",
             percent_encode_path(path)
@@ -292,8 +294,8 @@ impl OnedriveBackend {
         offset: usize,
         chunk_end: usize,
         total_len: usize,
-        body: AsyncBody,
-    ) -> Result<Response<IncomingAsyncBody>> {
+        body: Buffer,
+    ) -> Result<Response<Buffer>> {
         let mut req = Request::put(url);
 
         let auth_header_content = format!("Bearer {}", self.access_token);
@@ -318,7 +320,7 @@ impl OnedriveBackend {
         &self,
         url: &str,
         body: OneDriveUploadSessionCreationRequestBody,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let mut req = Request::post(url);
 
         let auth_header_content = format!("Bearer {}", self.access_token);
@@ -327,7 +329,7 @@ impl OnedriveBackend {
         req = req.header(header::CONTENT_TYPE, "application/json");
 
         let body_bytes = serde_json::to_vec(&body).map_err(new_json_serialize_error)?;
-        let asyn_body = AsyncBody::Bytes(Bytes::from(body_bytes));
+        let asyn_body = Buffer::from(Bytes::from(body_bytes));
         let req = req.body(asyn_body).map_err(new_request_build_error)?;
 
         self.client.send(req).await
@@ -337,7 +339,7 @@ impl OnedriveBackend {
         &self,
         url: &str,
         body: CreateDirPayload,
-    ) -> Result<Response<IncomingAsyncBody>> {
+    ) -> Result<Response<Buffer>> {
         let mut req = Request::post(url);
 
         let auth_header_content = format!("Bearer {}", self.access_token);
@@ -345,13 +347,13 @@ impl OnedriveBackend {
         req = req.header(header::CONTENT_TYPE, "application/json");
 
         let body_bytes = serde_json::to_vec(&body).map_err(new_json_serialize_error)?;
-        let async_body = AsyncBody::Bytes(bytes::Bytes::from(body_bytes));
+        let async_body = Buffer::from(bytes::Bytes::from(body_bytes));
         let req = req.body(async_body).map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }
 
-    pub(crate) async fn onedrive_delete(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub(crate) async fn onedrive_delete(&self, path: &str) -> Result<Response<Buffer>> {
         let path = build_abs_path(&self.root, path);
         let url = format!(
             "https://graph.microsoft.com/v1.0/me/drive/root:/{}",
@@ -363,9 +365,7 @@ impl OnedriveBackend {
         let auth_header_content = format!("Bearer {}", self.access_token);
         req = req.header(header::AUTHORIZATION, auth_header_content);
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        let req = req.body(Buffer::new()).map_err(new_request_build_error)?;
 
         self.client.send(req).await
     }

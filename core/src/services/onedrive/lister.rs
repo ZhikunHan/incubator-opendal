@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use async_trait::async_trait;
+use bytes::Buf;
 
 use super::backend::OnedriveBackend;
 use super::error::parse_error;
@@ -43,7 +43,6 @@ impl OnedriveLister {
     }
 }
 
-#[async_trait]
 impl oio::PageList for OnedriveLister {
     async fn next_page(&self, ctx: &mut oio::PageContext) -> Result<()> {
         let request_url = if ctx.token.is_empty() {
@@ -51,12 +50,9 @@ impl oio::PageList for OnedriveLister {
             let url: String = if path == "." || path == "/" {
                 "https://graph.microsoft.com/v1.0/me/drive/root/children".to_string()
             } else {
-                // According to OneDrive API examples, the path should not end with a slash.
-                // Reference: <https://learn.microsoft.com/en-us/onedrive/developer/rest-api/api/driveitem_list_children?view=odsp-graph-online>
-                let path = path.strip_suffix('/').unwrap_or("");
                 format!(
-                    "https://graph.microsoft.com/v1.0/me/drive/root:{}:/children",
-                    percent_encode_path(path),
+                    "https://graph.microsoft.com/v1.0/me/drive/root:/{}:/children",
+                    percent_encode_path(&path),
                 )
             };
             url
@@ -75,13 +71,21 @@ impl oio::PageList for OnedriveLister {
                 ctx.done = true;
                 return Ok(());
             }
-            let error = parse_error(resp).await?;
+            let error = parse_error(resp);
             return Err(error);
         }
 
-        let bytes = resp.into_body().bytes().await?;
-        let decoded_response = serde_json::from_slice::<GraphApiOnedriveListResponse>(&bytes)
-            .map_err(new_json_deserialize_error)?;
+        let bytes = resp.into_body();
+        let decoded_response: GraphApiOnedriveListResponse =
+            serde_json::from_reader(bytes.reader()).map_err(new_json_deserialize_error)?;
+
+        // Include the current directory itself when handling the first page of the listing.
+        if ctx.token.is_empty() && !ctx.done {
+            let path = build_abs_path(&self.root, self.path.as_str());
+            let path = build_rel_path(&self.root, &path);
+            let e = oio::Entry::new(&path, Metadata::new(EntryMode::DIR));
+            ctx.entries.push_back(e);
+        }
 
         if let Some(next_link) = decoded_response.next_link {
             ctx.token = next_link;
@@ -97,19 +101,29 @@ impl oio::PageList for OnedriveLister {
                 .unwrap_or("");
 
             let path = format!("{}/{}", parent_path, name);
-
-            let normalized_path = build_rel_path(&self.root, &path);
-
-            let entry: oio::Entry = match drive_item.item_type {
-                ItemType::Folder { .. } => {
-                    let normalized_path = format!("{}/", normalized_path);
-                    oio::Entry::new(&normalized_path, Metadata::new(EntryMode::DIR))
-                }
-                ItemType::File { .. } => {
-                    oio::Entry::new(&normalized_path, Metadata::new(EntryMode::FILE))
-                }
+            let mut normalized_path = build_rel_path(&self.root, &path);
+            let entry_mode = match drive_item.item_type {
+                ItemType::Folder { .. } => EntryMode::DIR,
+                ItemType::File { .. } => EntryMode::FILE,
             };
 
+            // OneDrive returns the folder without the trailing `/`
+            if entry_mode == EntryMode::DIR {
+                normalized_path.push('/');
+            }
+
+            let mut meta = Metadata::new(entry_mode).with_etag(drive_item.e_tag);
+            let last_modified =
+                parse_datetime_from_rfc3339(drive_item.last_modified_date_time.as_str())?;
+            meta.set_last_modified(last_modified);
+            let content_length = if drive_item.size < 0 {
+                0
+            } else {
+                drive_item.size as u64
+            };
+            meta.set_content_length(content_length);
+
+            let entry = oio::Entry::new(&normalized_path, meta);
             ctx.entries.push_back(entry)
         }
 

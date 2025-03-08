@@ -16,8 +16,10 @@
 # under the License.
 
 import os
-from random import randint
+import io
+from random import randint, choices
 from uuid import uuid4
+from pathlib import Path
 
 import pytest
 from opendal.exceptions import NotFound
@@ -45,9 +47,57 @@ def test_sync_reader(service_name, operator, async_operator):
     operator.write(filename, content)
 
     with operator.open(filename, "rb") as reader:
+        assert reader.readable()
+        assert not reader.writable()
+        assert not reader.closed
+
         read_content = reader.read()
         assert read_content is not None
         assert read_content == content
+
+    with operator.open(filename, "rb") as reader:
+        read_content = bytearray()
+        while True:
+            chunk = reader.read(size + 1)
+            if not chunk:
+                break
+            read_content.extend(chunk)
+
+        read_content = bytes(read_content)
+        assert read_content is not None
+        assert read_content == content
+
+    buf = bytearray(1)
+    with operator.open(filename, "rb") as reader:
+        reader.readinto(buf)
+        assert buf == content[:1]
+
+    operator.delete(filename)
+
+
+@pytest.mark.need_capability("read", "write", "delete")
+def test_sync_reader_readline(service_name, operator, async_operator):
+    size = randint(1, 1024)
+    lines = randint(1, min(100, size))
+    filename = f"random_file_{str(uuid4())}"
+    content = bytearray(os.urandom(size))
+
+    for idx in choices(range(0, size), k=lines):
+        content[idx] = ord("\n")
+    operator.write(filename, content)
+
+    line_contents = io.BytesIO(content).readlines()
+    i = 0
+
+    with operator.open(filename, "rb") as reader:
+        assert reader.readable()
+        assert not reader.writable()
+        assert not reader.closed
+
+        while (read_content := reader.readline()) != b"":
+            assert read_content is not None
+            assert read_content == line_contents[i]
+            i += 1
 
     operator.delete(filename)
 
@@ -69,6 +119,21 @@ async def test_async_read(service_name, operator, async_operator):
 
 @pytest.mark.asyncio
 @pytest.mark.need_capability("read", "write", "delete")
+async def test_async_read_path(service_name, operator, async_operator):
+    size = randint(1, 1024)
+    filename = Path(f"random_file_{str(uuid4())}")
+    content = os.urandom(size)
+    await async_operator.write(filename, content)
+
+    read_content = await async_operator.read(filename)
+    assert read_content is not None
+    assert read_content == content
+
+    await async_operator.delete(filename)
+
+
+@pytest.mark.asyncio
+@pytest.mark.need_capability("read", "write", "delete")
 async def test_async_reader(service_name, operator, async_operator):
     size = randint(1, 1024)
     filename = f"random_file_{str(uuid4())}"
@@ -77,6 +142,18 @@ async def test_async_reader(service_name, operator, async_operator):
 
     async with await async_operator.open(filename, "rb") as reader:
         read_content = await reader.read()
+        assert read_content is not None
+        assert read_content == content
+
+    async with await async_operator.open(filename, "rb") as reader:
+        read_content = bytearray()
+        while True:
+            chunk = await reader.read(size + 1)
+            if not chunk:
+                break
+            read_content.extend(chunk)
+
+        read_content = bytes(read_content)
         assert read_content is not None
         assert read_content == content
 

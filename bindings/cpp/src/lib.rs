@@ -15,10 +15,13 @@
 // specific language governing permissions and limitations
 // under the License.
 
+#[cfg(feature = "async")]
+mod r#async;
 mod lister;
 mod reader;
 mod types;
 
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use anyhow::Result;
@@ -79,7 +82,7 @@ mod ffi {
         fn new_operator(scheme: &str, configs: Vec<HashMapValue>) -> Result<Box<Operator>>;
         fn read(self: &Operator, path: &str) -> Result<Vec<u8>>;
         fn write(self: &Operator, path: &str, bs: &'static [u8]) -> Result<()>;
-        fn is_exist(self: &Operator, path: &str) -> Result<bool>;
+        fn exists(self: &Operator, path: &str) -> Result<bool>;
         fn create_dir(self: &Operator, path: &str) -> Result<()>;
         fn copy(self: &Operator, src: &str, dst: &str) -> Result<()>;
         fn rename(self: &Operator, src: &str, dst: &str) -> Result<()>;
@@ -101,19 +104,19 @@ pub struct Operator(od::BlockingOperator);
 fn new_operator(scheme: &str, configs: Vec<ffi::HashMapValue>) -> Result<Box<Operator>> {
     let scheme = od::Scheme::from_str(scheme)?;
 
-    let map = configs
+    let map: HashMap<String, String> = configs
         .into_iter()
         .map(|value| (value.key, value.value))
         .collect();
 
-    let op = Box::new(Operator(od::Operator::via_map(scheme, map)?.blocking()));
+    let op = Box::new(Operator(od::Operator::via_iter(scheme, map)?.blocking()));
 
     Ok(op)
 }
 
 impl Operator {
     fn read(&self, path: &str) -> Result<Vec<u8>> {
-        Ok(self.0.read(path)?)
+        Ok(self.0.read(path)?.to_vec())
     }
 
     // To avoid copying the bytes, we use &'static [u8] here.
@@ -121,11 +124,11 @@ impl Operator {
     // Safety: The bytes created from bs will be dropped after the function call.
     // So it's safe to declare its lifetime as 'static.
     fn write(&self, path: &str, bs: &'static [u8]) -> Result<()> {
-        Ok(self.0.write(path, bs)?)
+        Ok(self.0.write(path, bs).map(|_| ())?)
     }
 
-    fn is_exist(&self, path: &str) -> Result<bool> {
-        Ok(self.0.is_exist(path)?)
+    fn exists(&self, path: &str) -> Result<bool> {
+        Ok(self.0.exists(path)?)
     }
 
     fn create_dir(&self, path: &str) -> Result<()> {
@@ -154,7 +157,12 @@ impl Operator {
     }
 
     fn reader(&self, path: &str) -> Result<Box<Reader>> {
-        Ok(Box::new(Reader(self.0.reader(path)?)))
+        let meta = self.0.stat(path)?;
+        Ok(Box::new(Reader(
+            self.0
+                .reader(path)?
+                .into_std_read(0..meta.content_length())?,
+        )))
     }
 
     fn lister(&self, path: &str) -> Result<Box<Lister>> {

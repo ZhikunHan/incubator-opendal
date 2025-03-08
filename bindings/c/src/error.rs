@@ -16,6 +16,7 @@
 // under the License.
 
 use ::opendal as core;
+use opendal::Buffer;
 
 use crate::types::opendal_bytes;
 
@@ -44,6 +45,10 @@ pub enum opendal_code {
     OPENDAL_RATE_LIMITED,
     /// The given file paths are same.
     OPENDAL_IS_SAME_FILE,
+    /// The condition of this operation is not match.
+    OPENDAL_CONDITION_NOT_MATCH,
+    /// The range of the content is not satisfied.
+    OPENDAL_RANGE_NOT_SATISFIED,
 }
 
 impl From<core::ErrorKind> for opendal_code {
@@ -59,9 +64,13 @@ impl From<core::ErrorKind> for opendal_code {
             core::ErrorKind::AlreadyExists => opendal_code::OPENDAL_ALREADY_EXISTS,
             core::ErrorKind::RateLimited => opendal_code::OPENDAL_RATE_LIMITED,
             core::ErrorKind::IsSameFile => opendal_code::OPENDAL_IS_SAME_FILE,
+            core::ErrorKind::ConditionNotMatch => opendal_code::OPENDAL_CONDITION_NOT_MATCH,
+            core::ErrorKind::RangeNotSatisfied => opendal_code::OPENDAL_RANGE_NOT_SATISFIED,
             // if this is triggered, check the [`core`] crate and add a
             // new error code accordingly
-            _ => panic!("The newly added ErrorKind in core crate is not handled in C bindings"),
+            _ => unimplemented!(
+                "The newly added ErrorKind in core crate is not handled in C bindings"
+            ),
         }
     }
 }
@@ -73,7 +82,7 @@ impl From<core::ErrorKind> for opendal_code {
 /// represents no error has taken placed**. If any error has taken place, the caller should check
 /// the error code and print the error message.
 ///
-/// The error code is represented in opendal_code, which is a enum on different type of errors.
+/// The error code is represented in opendal_code, which is an enum on different type of errors.
 /// The error messages is represented in opendal_bytes, which is a non-null terminated byte array.
 ///
 /// \note 1. The error message is on heap, so the error needs to be freed by the caller, by calling
@@ -96,7 +105,7 @@ impl opendal_error {
     /// free this error.
     pub fn new(err: core::Error) -> *mut opendal_error {
         let code = opendal_code::from(err.kind());
-        let message = opendal_bytes::new(err.to_string().into_bytes());
+        let message = opendal_bytes::new(Buffer::from(err.to_string()));
 
         Box::into_raw(Box::new(opendal_error { code, message }))
     }
@@ -105,16 +114,7 @@ impl opendal_error {
     #[no_mangle]
     pub unsafe extern "C" fn opendal_error_free(ptr: *mut opendal_error) {
         if !ptr.is_null() {
-            let message_ptr = &(*ptr).message as *const opendal_bytes as *mut opendal_bytes;
-            if !message_ptr.is_null() {
-                let data_mut = unsafe { (*message_ptr).data as *mut u8 };
-                let _ = unsafe {
-                    Vec::from_raw_parts(data_mut, (*message_ptr).len, (*message_ptr).len)
-                };
-            }
-
-            // free the pointer
-            let _ = unsafe { Box::from_raw(ptr) };
+            drop(Box::from_raw(ptr));
         }
     }
 }

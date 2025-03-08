@@ -15,12 +15,15 @@
 // specific language governing permissions and limitations
 // under the License.
 
+use std::collections::HashMap;
+
 use anyhow::Result;
-use bytes::Buf;
 use bytes::Bytes;
 use futures::io::BufReader;
 use futures::io::Cursor;
 use futures::stream;
+use futures::AsyncWriteExt;
+use futures::SinkExt;
 use futures::StreamExt;
 use log::warn;
 use sha2::Digest;
@@ -31,7 +34,7 @@ use crate::*;
 pub fn tests(op: &Operator, tests: &mut Vec<Trial>) {
     let cap = op.info().full_capability();
 
-    if cap.write && cap.stat {
+    if cap.read && cap.write && cap.stat {
         tests.extend(async_trials!(
             op,
             test_write_only,
@@ -41,18 +44,30 @@ pub fn tests(op: &Operator, tests: &mut Vec<Trial>) {
             test_write_with_cache_control,
             test_write_with_content_type,
             test_write_with_content_disposition,
+            test_write_with_content_encoding,
+            test_write_with_if_none_match,
+            test_write_with_if_not_exists,
+            test_write_with_if_match,
+            test_write_with_user_metadata,
+            test_write_returns_metadata,
             test_writer_write,
+            test_writer_write_with_overwrite,
+            test_writer_write_with_concurrent,
             test_writer_sink,
-            test_writer_copy,
+            test_writer_sink_with_concurrent,
             test_writer_abort,
-            test_writer_futures_copy
+            test_writer_abort_with_concurrent,
+            test_writer_futures_copy,
+            test_writer_futures_copy_with_concurrent,
+            test_writer_return_metadata
         ))
     }
 
-    if cap.write && cap.write_can_append && cap.stat {
+    if cap.read && cap.write && cap.write_can_append && cap.stat {
         tests.extend(async_trials!(
             op,
             test_write_with_append,
+            test_write_with_append_returns_metadata,
             test_writer_with_append
         ))
     }
@@ -78,7 +93,8 @@ pub async fn test_write_with_empty_content(op: Operator) -> Result<()> {
 
     let path = TEST_FIXTURE.new_file_path();
 
-    op.write(&path, vec![]).await?;
+    let bs: Vec<u8> = vec![];
+    op.write(&path, bs).await?;
 
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), 0);
@@ -98,14 +114,14 @@ pub async fn test_write_with_dir_path(op: Operator) -> Result<()> {
 
 /// Write a single file with special chars should succeed.
 pub async fn test_write_with_special_chars(op: Operator) -> Result<()> {
-    // Ignore test for supabase until https://github.com/apache/incubator-opendal/issues/2194 addressed.
-    if op.info().scheme() == opendal::Scheme::Supabase {
-        warn!("ignore test for supabase until https://github.com/apache/incubator-opendal/issues/2194 is resolved");
-        return Ok(());
-    }
     // Ignore test for atomicserver until https://github.com/atomicdata-dev/atomic-server/issues/663 addressed.
     if op.info().scheme() == opendal::Scheme::Atomicserver {
         warn!("ignore test for atomicserver until https://github.com/atomicdata-dev/atomic-server/issues/663 is resolved");
+        return Ok(());
+    }
+    // Ignore test for vercel blob https://github.com/apache/opendal/pull/4103.
+    if op.info().scheme() == opendal::Scheme::VercelBlob {
+        warn!("ignore test for vercel blob https://github.com/apache/opendal/pull/4103");
         return Ok(());
     }
 
@@ -194,6 +210,76 @@ pub async fn test_write_with_content_disposition(op: Operator) -> Result<()> {
     Ok(())
 }
 
+/// Write a single file with content encoding should succeed.
+pub async fn test_write_with_content_encoding(op: Operator) -> Result<()> {
+    if !op.info().full_capability().write_with_content_encoding {
+        return Ok(());
+    }
+
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+
+    let target_content_encoding = "gzip";
+    op.write_with(&path, content)
+        .content_encoding(target_content_encoding)
+        .await?;
+
+    let meta = op.stat(&path).await.expect("stat must succeed");
+    assert_eq!(
+        meta.content_encoding()
+            .expect("content encoding must exist"),
+        target_content_encoding
+    );
+    Ok(())
+}
+
+/// write a single file with user defined metadata should succeed.
+pub async fn test_write_with_user_metadata(op: Operator) -> Result<()> {
+    if !op.info().full_capability().write_with_user_metadata {
+        return Ok(());
+    }
+
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+    let target_user_metadata = vec![("location".to_string(), "everywhere".to_string())];
+    op.write_with(&path, content)
+        .user_metadata(target_user_metadata.clone())
+        .await?;
+
+    let meta = op.stat(&path).await.expect("stat must succeed");
+    let resp_meta = meta.user_metadata().expect("meta data must exist");
+
+    assert_eq!(
+        *resp_meta,
+        target_user_metadata.into_iter().collect::<HashMap<_, _>>()
+    );
+
+    Ok(())
+}
+
+pub async fn test_write_returns_metadata(op: Operator) -> Result<()> {
+    let cap = op.info().full_capability();
+
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+
+    let meta = op.write(&path, content).await?;
+    let stat_meta = op.stat(&path).await?;
+
+    assert_eq!(stat_meta.content_length(), meta.content_length());
+    if cap.write_has_etag {
+        assert_eq!(stat_meta.etag(), meta.etag());
+    }
+    if cap.write_has_last_modified {
+        assert_eq!(stat_meta.last_modified(), meta.last_modified());
+    }
+    if cap.write_has_version {
+        assert_eq!(stat_meta.version(), meta.version());
+    }
+    if cap.write_has_content_md5 {
+        assert_eq!(stat_meta.content_md5(), meta.content_md5());
+    }
+
+    Ok(())
+}
+
 /// Delete existing file should succeed.
 pub async fn test_writer_abort(op: Operator) -> Result<()> {
     let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
@@ -217,7 +303,34 @@ pub async fn test_writer_abort(op: Operator) -> Result<()> {
     }
 
     // Aborted writer should not write actual file.
-    assert!(!op.is_exist(&path).await?);
+    assert!(!op.exists(&path).await?);
+    Ok(())
+}
+
+/// Delete existing file should succeed.
+pub async fn test_writer_abort_with_concurrent(op: Operator) -> Result<()> {
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+
+    let mut writer = match op.writer_with(&path).concurrent(2).await {
+        Ok(writer) => writer,
+        Err(e) => {
+            assert_eq!(e.kind(), ErrorKind::Unsupported);
+            return Ok(());
+        }
+    };
+
+    if let Err(e) = writer.write(content).await {
+        assert_eq!(e.kind(), ErrorKind::Unsupported);
+        return Ok(());
+    }
+
+    if let Err(e) = writer.abort().await {
+        assert_eq!(e.kind(), ErrorKind::Unsupported);
+        return Ok(());
+    }
+
+    // Aborted writer should not write actual file.
+    assert!(!op.exists(&path).await?);
     Ok(())
 }
 
@@ -240,7 +353,7 @@ pub async fn test_writer_write(op: Operator) -> Result<()> {
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), (size * 2) as u64);
 
-    let bs = op.read(&path).await?;
+    let bs = op.read(&path).await?.to_bytes();
     assert_eq!(bs.len(), size * 2, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),
@@ -250,6 +363,51 @@ pub async fn test_writer_write(op: Operator) -> Result<()> {
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[size..])),
         format!("{:x}", Sha256::digest(content_b)),
+        "read content b"
+    );
+
+    Ok(())
+}
+
+/// Append data into writer
+pub async fn test_writer_write_with_concurrent(op: Operator) -> Result<()> {
+    if !(op.info().full_capability().write_can_multi) {
+        return Ok(());
+    }
+
+    let path = TEST_FIXTURE.new_file_path();
+    // We need at least 3 part to make sure concurrent happened.
+    let (content_a, size_a) = gen_bytes_with_range(5 * 1024 * 1024..6 * 1024 * 1024);
+    let (content_b, size_b) = gen_bytes_with_range(5 * 1024 * 1024..6 * 1024 * 1024);
+    let (content_c, size_c) = gen_bytes_with_range(5 * 1024 * 1024..6 * 1024 * 1024);
+
+    let mut w = op.writer_with(&path).concurrent(3).await?;
+    w.write(content_a.clone()).await?;
+    w.write(content_b.clone()).await?;
+    w.write(content_c.clone()).await?;
+    w.close().await?;
+
+    let meta = op.stat(&path).await.expect("stat must succeed");
+    assert_eq!(meta.content_length(), (size_a + size_b + size_c) as u64);
+
+    let bs = op.read(&path).await?.to_bytes();
+    assert_eq!(bs.len(), size_a + size_b + size_c, "read size");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bs[..size_a])),
+        format!("{:x}", Sha256::digest(content_a)),
+        "read content a"
+    );
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bs[size_a..size_a + size_b])),
+        format!("{:x}", Sha256::digest(content_b)),
+        "read content b"
+    );
+    assert_eq!(
+        format!(
+            "{:x}",
+            Sha256::digest(&bs[size_a + size_b..size_a + size_b + size_c])
+        ),
+        format!("{:x}", Sha256::digest(content_c)),
         "read content b"
     );
 
@@ -267,16 +425,24 @@ pub async fn test_writer_sink(op: Operator) -> Result<()> {
     let size = 5 * 1024 * 1024; // write file with 5 MiB
     let content_a = gen_fixed_bytes(size);
     let content_b = gen_fixed_bytes(size);
-    let stream = stream::iter(vec![content_a.clone(), content_b.clone()]).map(Ok);
+    let mut stream = stream::iter(vec![
+        Bytes::from(content_a.clone()),
+        Bytes::from(content_b.clone()),
+    ])
+    .map(Ok);
 
-    let mut w = op.writer_with(&path).buffer(5 * 1024 * 1024).await?;
-    w.sink(stream).await?;
+    let mut w = op
+        .writer_with(&path)
+        .chunk(4 * 1024 * 1024)
+        .await?
+        .into_bytes_sink();
+    w.send_all(&mut stream).await?;
     w.close().await?;
 
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), (size * 2) as u64);
 
-    let bs = op.read(&path).await?;
+    let bs = op.read(&path).await?.to_bytes();
     assert_eq!(bs.len(), size * 2, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),
@@ -292,32 +458,36 @@ pub async fn test_writer_sink(op: Operator) -> Result<()> {
     Ok(())
 }
 
-/// Reading data into writer
-pub async fn test_writer_copy(op: Operator) -> Result<()> {
+/// Streaming data into writer
+pub async fn test_writer_sink_with_concurrent(op: Operator) -> Result<()> {
     let cap = op.info().full_capability();
     if !(cap.write && cap.write_can_multi) {
         return Ok(());
     }
 
     let path = TEST_FIXTURE.new_file_path();
-    let size = 5 * 1024 * 1024; // write file with 5 MiB
+    let size = 8 * 1024 * 1024; // write file with 8 MiB
     let content_a = gen_fixed_bytes(size);
     let content_b = gen_fixed_bytes(size);
+    let mut stream = stream::iter(vec![
+        Bytes::from(content_a.clone()),
+        Bytes::from(content_b.clone()),
+    ])
+    .map(Ok);
 
-    let mut w = op.writer_with(&path).buffer(5 * 1024 * 1024).await?;
-
-    let mut content = Bytes::from([content_a.clone(), content_b.clone()].concat());
-    while !content.is_empty() {
-        let reader = Cursor::new(content.clone());
-        let n = w.copy(reader).await?;
-        content.advance(n as usize);
-    }
+    let mut w = op
+        .writer_with(&path)
+        .chunk(5 * 1024 * 1024)
+        .concurrent(4)
+        .await?
+        .into_bytes_sink();
+    w.send_all(&mut stream).await?;
     w.close().await?;
 
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), (size * 2) as u64);
 
-    let bs = op.read(&path).await?;
+    let bs = op.read(&path).await?.to_bytes();
     assert_eq!(bs.len(), size * 2, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),
@@ -343,7 +513,11 @@ pub async fn test_writer_futures_copy(op: Operator) -> Result<()> {
     let (content, size): (Vec<u8>, usize) =
         gen_bytes_with_range(10 * 1024 * 1024..20 * 1024 * 1024);
 
-    let mut w = op.writer_with(&path).buffer(8 * 1024 * 1024).await?;
+    let mut w = op
+        .writer_with(&path)
+        .chunk(8 * 1024 * 1024)
+        .await?
+        .into_futures_async_write();
 
     // Wrap a buf reader here to make sure content is read in 1MiB chunks.
     let mut cursor = BufReader::with_capacity(1024 * 1024, Cursor::new(content.clone()));
@@ -353,13 +527,84 @@ pub async fn test_writer_futures_copy(op: Operator) -> Result<()> {
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), size as u64);
 
-    let bs = op.read(&path).await?;
+    let bs = op.read(&path).await?.to_bytes();
     assert_eq!(bs.len(), size, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),
         format!("{:x}", Sha256::digest(content)),
         "read content"
     );
+
+    Ok(())
+}
+
+/// Copy data from reader to writer
+pub async fn test_writer_futures_copy_with_concurrent(op: Operator) -> Result<()> {
+    if !(op.info().full_capability().write_can_multi) {
+        return Ok(());
+    }
+
+    let path = TEST_FIXTURE.new_file_path();
+    let (content, size): (Vec<u8>, usize) =
+        gen_bytes_with_range(10 * 1024 * 1024..20 * 1024 * 1024);
+
+    let mut w = op
+        .writer_with(&path)
+        .chunk(8 * 1024 * 1024)
+        .concurrent(4)
+        .await?
+        .into_futures_async_write();
+
+    // Wrap a buf reader here to make sure content is read in 1MiB chunks.
+    let mut cursor = BufReader::with_capacity(1024 * 1024, Cursor::new(content.clone()));
+    futures::io::copy_buf(&mut cursor, &mut w).await?;
+    w.close().await.expect("close must succeed");
+
+    let meta = op.stat(&path).await.expect("stat must succeed");
+    assert_eq!(meta.content_length(), size as u64);
+
+    let bs = op.read(&path).await?.to_bytes();
+    assert_eq!(bs.len(), size, "read size");
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bs[..size])),
+        format!("{:x}", Sha256::digest(content)),
+        "read content"
+    );
+
+    Ok(())
+}
+
+pub async fn test_writer_return_metadata(op: Operator) -> Result<()> {
+    let cap = op.info().full_capability();
+    if !cap.write_can_multi {
+        return Ok(());
+    }
+
+    let path = TEST_FIXTURE.new_file_path();
+    let size = 5 * 1024 * 1024; // write file with 5 MiB
+    let content_a = gen_fixed_bytes(size);
+    let content_b = gen_fixed_bytes(size);
+
+    let mut w = op.writer(&path).await?;
+    w.write(content_a.clone()).await?;
+    w.write(content_b.clone()).await?;
+    let meta = w.close().await?;
+
+    let stat_meta = op.stat(&path).await.expect("stat must succeed");
+
+    assert_eq!(stat_meta.content_length(), meta.content_length());
+    if cap.write_has_last_modified {
+        assert_eq!(stat_meta.last_modified(), meta.last_modified());
+    }
+    if cap.write_has_etag {
+        assert_eq!(stat_meta.etag(), meta.etag());
+    }
+    if cap.write_has_version {
+        assert_eq!(stat_meta.version(), meta.version());
+    }
+    if cap.write_has_content_md5 {
+        assert_eq!(stat_meta.content_md5(), meta.content_md5());
+    }
 
     Ok(())
 }
@@ -383,11 +628,52 @@ pub async fn test_write_with_append(op: Operator) -> Result<()> {
         .await
         .expect("append to an existing file must success");
 
-    let bs = op.read(&path).await.expect("read file must success");
+    let bs = op
+        .read(&path)
+        .await
+        .expect("read file must success")
+        .to_bytes();
 
     assert_eq!(bs.len(), size_one + size_two);
     assert_eq!(bs[..size_one], content_one);
     assert_eq!(bs[size_one..], content_two);
+
+    Ok(())
+}
+
+pub async fn test_write_with_append_returns_metadata(op: Operator) -> Result<()> {
+    let cap = op.info().full_capability();
+
+    let path = TEST_FIXTURE.new_file_path();
+    let (content_one, _) = gen_bytes(cap);
+    let (content_two, _) = gen_bytes(cap);
+
+    op.write_with(&path, content_one.clone())
+        .append(true)
+        .await
+        .expect("append file first time must success");
+
+    let meta = op
+        .write_with(&path, content_two.clone())
+        .append(true)
+        .await
+        .expect("append to an existing file must success");
+
+    let stat_meta = op.stat(&path).await.expect("stat must succeed");
+
+    assert_eq!(stat_meta.content_length(), meta.content_length());
+    if cap.write_has_last_modified {
+        assert_eq!(stat_meta.last_modified(), meta.last_modified());
+    }
+    if cap.write_has_etag {
+        assert_eq!(stat_meta.etag(), meta.etag());
+    }
+    if cap.write_has_version {
+        assert_eq!(stat_meta.version(), meta.version());
+    }
+    if cap.write_has_content_md5 {
+        assert_eq!(stat_meta.content_md5(), meta.content_md5());
+    }
 
     Ok(())
 }
@@ -398,7 +684,11 @@ pub async fn test_writer_with_append(op: Operator) -> Result<()> {
     let (content, size): (Vec<u8>, usize) =
         gen_bytes_with_range(10 * 1024 * 1024..20 * 1024 * 1024);
 
-    let mut a = op.writer_with(&path).append(true).await?;
+    let mut a = op
+        .writer_with(&path)
+        .append(true)
+        .await?
+        .into_futures_async_write();
 
     // Wrap a buf reader here to make sure content is read in 1MiB chunks.
     let mut cursor = BufReader::with_capacity(1024 * 1024, Cursor::new(content.clone()));
@@ -408,7 +698,7 @@ pub async fn test_writer_with_append(op: Operator) -> Result<()> {
     let meta = op.stat(&path).await.expect("stat must succeed");
     assert_eq!(meta.content_length(), size as u64);
 
-    let bs = op.read(&path).await?;
+    let bs = op.read(&path).await?.to_bytes();
     assert_eq!(bs.len(), size, "read size");
     assert_eq!(
         format!("{:x}", Sha256::digest(&bs[..size])),
@@ -417,5 +707,127 @@ pub async fn test_writer_with_append(op: Operator) -> Result<()> {
     );
 
     op.delete(&path).await.expect("delete must succeed");
+    Ok(())
+}
+
+pub async fn test_writer_write_with_overwrite(op: Operator) -> Result<()> {
+    // ghac does not support overwrite
+    if op.info().scheme() == Scheme::Ghac {
+        return Ok(());
+    }
+
+    let path = uuid::Uuid::new_v4().to_string();
+    let (content_one, _) = gen_bytes(op.info().full_capability());
+    let (content_two, _) = gen_bytes(op.info().full_capability());
+
+    op.write(&path, content_one.clone()).await?;
+    let bs = op.read(&path).await?.to_bytes();
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bs)),
+        format!("{:x}", Sha256::digest(&content_one)),
+        "read content_one"
+    );
+    op.write(&path, content_two.clone())
+        .await
+        .expect("write overwrite must succeed");
+    let bs = op.read(&path).await?.to_bytes();
+    assert_ne!(
+        format!("{:x}", Sha256::digest(&bs)),
+        format!("{:x}", Sha256::digest(&content_one)),
+        "content_one must be overwrote"
+    );
+    assert_eq!(
+        format!("{:x}", Sha256::digest(&bs)),
+        format!("{:x}", Sha256::digest(&content_two)),
+        "read content_two"
+    );
+
+    op.delete(&path).await.expect("delete must succeed");
+    Ok(())
+}
+
+/// Write an exists file with if_none_match should match, else get a ConditionNotMatch error.
+pub async fn test_write_with_if_none_match(op: Operator) -> Result<()> {
+    if !op.info().full_capability().write_with_if_none_match {
+        return Ok(());
+    }
+
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+
+    op.write(&path, content.clone())
+        .await
+        .expect("write must succeed");
+
+    let meta = op.stat(&path).await?;
+
+    let res = op
+        .write_with(&path, content.clone())
+        .if_none_match(meta.etag().expect("etag must exist"))
+        .await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().kind(), ErrorKind::ConditionNotMatch);
+
+    Ok(())
+}
+
+/// Write an file with if_not_exists will get a ConditionNotMatch error if file exists.
+pub async fn test_write_with_if_not_exists(op: Operator) -> Result<()> {
+    if !op.info().full_capability().write_with_if_not_exists {
+        return Ok(());
+    }
+
+    let (path, content, _) = TEST_FIXTURE.new_file(op.clone());
+
+    let res = op
+        .write_with(&path, content.clone())
+        .if_not_exists(true)
+        .await;
+    assert!(res.is_ok());
+
+    let res = op
+        .write_with(&path, content.clone())
+        .if_not_exists(true)
+        .await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().kind(), ErrorKind::ConditionNotMatch);
+
+    Ok(())
+}
+
+/// Write an file with if_match will get a ConditionNotMatch error if file's etag does not match.
+pub async fn test_write_with_if_match(op: Operator) -> Result<()> {
+    if !op.info().full_capability().write_with_if_match {
+        return Ok(());
+    }
+
+    // Create two different files with different content
+    let (path_a, content_a, _) = TEST_FIXTURE.new_file(op.clone());
+    let (path_b, content_b, _) = TEST_FIXTURE.new_file(op.clone());
+
+    // Write initial content to both files
+    op.write(&path_a, content_a.clone()).await?;
+    op.write(&path_b, content_b.clone()).await?;
+
+    // Get etags for both files
+    let meta_a = op.stat(&path_a).await?;
+    let etag_a = meta_a.etag().expect("etag must exist");
+    let meta_b = op.stat(&path_b).await?;
+    let etag_b = meta_b.etag().expect("etag must exist");
+
+    // Should succeed: Writing to path_a with its own etag
+    let res = op
+        .write_with(&path_a, content_a.clone())
+        .if_match(etag_a)
+        .await;
+    assert!(res.is_ok());
+
+    // Should fail: Writing to path_a with path_b's etag
+    let res = op
+        .write_with(&path_a, content_a.clone())
+        .if_match(etag_b)
+        .await;
+    assert!(res.is_err());
+    assert_eq!(res.unwrap_err().kind(), ErrorKind::ConditionNotMatch);
+
     Ok(())
 }

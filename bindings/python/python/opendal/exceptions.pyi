@@ -69,18 +69,3 @@ class ConditionNotMatch(Error):
     """Condition not match"""
 
     pass
-
-class ContentTruncated(Error):
-    """Content truncated"""
-
-    pass
-
-class ContentIncomplete(Error):
-    """Content incomplete"""
-
-    pass
-
-class InvalidInput(Error):
-    """Invalid input"""
-
-    pass

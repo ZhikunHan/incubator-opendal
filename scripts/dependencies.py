@@ -17,53 +17,32 @@
 # under the License.
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter, REMAINDER
+from pathlib import Path
 import subprocess
-import os
-
-
-DIRS = [
-    "core",
-
-    "bin/oli",
-    "bin/oay",
-    "bin/ofs",
-
-    "bindings/c",
-    "bindings/cpp",
-    "bindings/dotnet",
-    "bindings/haskell",
-    "bindings/java",
-    "bindings/lua",
-    "bindings/nodejs",
-    "bindings/ocaml",
-    "bindings/php",
-    "bindings/python",
-    "bindings/ruby",
-
-    "integrations/dav-server",
-    "integrations/object_store",
-]
+from constants import PACKAGES
 
 
 def check_deps():
-    cargo_dirs = DIRS
+    cargo_dirs = PACKAGES
     for root in cargo_dirs:
         print(f"Checking dependencies of {root}")
         subprocess.run(["cargo", "deny", "check", "license"], cwd=root)
 
 
 def generate_deps():
-    cargo_dirs = DIRS
+    cargo_dirs = PACKAGES
     for root in cargo_dirs:
-        print(f"Generating dependencies {root}")
-        result = subprocess.run(
-            ["cargo", "deny", "list", "-f", "tsv", "-t", "0.6"],
-            cwd=root,
-            capture_output=True,
-            text=True,
-        )
-        with open(f"{root}/DEPENDENCIES.rust.tsv", "w") as f:
-            f.write(result.stdout)
+        if (Path(root) / "Cargo.toml").exists():
+            print(f"Generating dependencies {root}")
+            result = subprocess.check_output(
+                ["cargo", "deny", "list", "-f", "tsv", "-t", "0.6"],
+                cwd=root,
+                text=True,
+            )
+            with open(f"{root}/DEPENDENCIES.rust.tsv", "w") as f:
+                f.write(result)
+        else:
+            print(f"Skipping {root} as Cargo.toml does not exist")
 
 
 if __name__ == "__main__":
@@ -72,18 +51,16 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers()
 
     parser_check = subparsers.add_parser(
-        'check',
-        description="Check dependencies",
-        help="Check dependencies")
+        "check", description="Check dependencies", help="Check dependencies"
+    )
     parser_check.set_defaults(func=check_deps)
 
     parser_generate = subparsers.add_parser(
-        'generate',
-        description="Generate dependencies",
-        help="Generate dependencies")
+        "generate", description="Generate dependencies", help="Generate dependencies"
+    )
     parser_generate.set_defaults(func=generate_deps)
 
     args = parser.parse_args()
     arg_dict = dict(vars(args))
-    del arg_dict['func']
+    del arg_dict["func"]
     args.func(**arg_dict)

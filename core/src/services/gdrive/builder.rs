@@ -15,7 +15,6 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -26,38 +25,53 @@ use log::debug;
 use tokio::sync::Mutex;
 
 use super::backend::GdriveBackend;
-use crate::raw::normalize_root;
+use super::core::GdriveCore;
+use super::core::GdrivePathQuery;
+use super::core::GdriveSigner;
+use crate::raw::Access;
 use crate::raw::HttpClient;
-use crate::services::gdrive::core::GdriveCore;
-use crate::services::gdrive::core::GdriveSigner;
+use crate::raw::PathCacher;
+use crate::raw::{normalize_root, AccessorInfo};
+use crate::services::GdriveConfig;
 use crate::Scheme;
 use crate::*;
+
+impl Configurator for GdriveConfig {
+    type Builder = GdriveBuilder;
+    fn into_builder(self) -> Self::Builder {
+        GdriveBuilder {
+            config: self,
+            http_client: None,
+        }
+    }
+}
 
 /// [GoogleDrive](https://drive.google.com/) backend support.
 #[derive(Default)]
 #[doc = include_str!("docs.md")]
 pub struct GdriveBuilder {
-    root: Option<String>,
-
-    access_token: Option<String>,
-
-    refresh_token: Option<String>,
-    client_id: Option<String>,
-    client_secret: Option<String>,
+    config: GdriveConfig,
 
     http_client: Option<HttpClient>,
 }
 
 impl Debug for GdriveBuilder {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Backend").field("root", &self.root).finish()
+        f.debug_struct("Backend")
+            .field("config", &self.config)
+            .finish()
     }
 }
 
 impl GdriveBuilder {
     /// Set root path of GoogleDrive folder.
-    pub fn root(&mut self, root: &str) -> &mut Self {
-        self.root = Some(root.to_string());
+    pub fn root(mut self, root: &str) -> Self {
+        self.config.root = if root.is_empty() {
+            None
+        } else {
+            Some(root.to_string())
+        };
+
         self
     }
 
@@ -70,9 +84,9 @@ impl GdriveBuilder {
     ///
     /// - An access token is valid for 1 hour.
     /// - If you want to use the access token for a long time,
-    /// you can use the refresh token to get a new access token.
-    pub fn access_token(&mut self, access_token: &str) -> &mut Self {
-        self.access_token = Some(access_token.to_string());
+    ///   you can use the refresh token to get a new access token.
+    pub fn access_token(mut self, access_token: &str) -> Self {
+        self.config.access_token = Some(access_token.to_string());
         self
     }
 
@@ -81,24 +95,24 @@ impl GdriveBuilder {
     /// You can get the refresh token via OAuth 2.0 Flow of GoogleDrive API.
     ///
     /// OpenDAL will use this refresh token to get a new access token when the old one is expired.
-    pub fn refresh_token(&mut self, refresh_token: &str) -> &mut Self {
-        self.refresh_token = Some(refresh_token.to_string());
+    pub fn refresh_token(mut self, refresh_token: &str) -> Self {
+        self.config.refresh_token = Some(refresh_token.to_string());
         self
     }
 
     /// Set the client id for GoogleDrive.
     ///
     /// This is required for OAuth 2.0 Flow to refresh the access token.
-    pub fn client_id(&mut self, client_id: &str) -> &mut Self {
-        self.client_id = Some(client_id.to_string());
+    pub fn client_id(mut self, client_id: &str) -> Self {
+        self.config.client_id = Some(client_id.to_string());
         self
     }
 
     /// Set the client secret for GoogleDrive.
     ///
     /// This is required for OAuth 2.0 Flow with refresh the access token.
-    pub fn client_secret(&mut self, client_secret: &str) -> &mut Self {
-        self.client_secret = Some(client_secret.to_string());
+    pub fn client_secret(mut self, client_secret: &str) -> Self {
+        self.config.client_secret = Some(client_secret.to_string());
         self
     }
 
@@ -108,7 +122,7 @@ impl GdriveBuilder {
     ///
     /// This API is part of OpenDAL's Raw API. `HttpClient` could be changed
     /// during minor updates.
-    pub fn http_client(&mut self, http_client: HttpClient) -> &mut Self {
+    pub fn http_client(mut self, http_client: HttpClient) -> Self {
         self.http_client = Some(http_client);
         self
     }
@@ -116,26 +130,13 @@ impl GdriveBuilder {
 
 impl Builder for GdriveBuilder {
     const SCHEME: Scheme = Scheme::Gdrive;
+    type Config = GdriveConfig;
 
-    type Accessor = GdriveBackend;
-
-    fn from_map(map: HashMap<String, String>) -> Self {
-        let mut builder = Self::default();
-
-        map.get("root").map(|v| builder.root(v));
-        map.get("access_token").map(|v| builder.access_token(v));
-        map.get("refresh_token").map(|v| builder.refresh_token(v));
-        map.get("client_id").map(|v| builder.client_id(v));
-        map.get("client_secret").map(|v| builder.client_secret(v));
-
-        builder
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
-        let root = normalize_root(&self.root.take().unwrap_or_default());
+    fn build(self) -> Result<impl Access> {
+        let root = normalize_root(&self.config.root.unwrap_or_default());
         debug!("backend use root {}", root);
 
-        let client = if let Some(client) = self.http_client.take() {
+        let client = if let Some(client) = self.http_client {
             client
         } else {
             HttpClient::new().map_err(|err| {
@@ -144,22 +145,22 @@ impl Builder for GdriveBuilder {
             })?
         };
 
-        let signer = match (self.access_token.take(), self.refresh_token.take()) {
-            (Some(access_token), None) => GdriveSigner {
-                access_token,
+        let mut signer = GdriveSigner::new(client.clone());
+        match (self.config.access_token, self.config.refresh_token) {
+            (Some(access_token), None) => {
+                signer.access_token = access_token;
                 // We will never expire user specified access token.
-                expires_in: DateTime::<Utc>::MAX_UTC,
-                ..Default::default()
-            },
+                signer.expires_in = DateTime::<Utc>::MAX_UTC;
+            }
             (None, Some(refresh_token)) => {
-                let client_id = self.client_id.take().ok_or_else(|| {
+                let client_id = self.config.client_id.ok_or_else(|| {
                     Error::new(
                         ErrorKind::ConfigInvalid,
                         "client_id must be set when refresh_token is set",
                     )
                     .with_context("service", Scheme::Gdrive)
                 })?;
-                let client_secret = self.client_secret.take().ok_or_else(|| {
+                let client_secret = self.config.client_secret.ok_or_else(|| {
                     Error::new(
                         ErrorKind::ConfigInvalid,
                         "client_secret must be set when refresh_token is set",
@@ -167,12 +168,10 @@ impl Builder for GdriveBuilder {
                     .with_context("service", Scheme::Gdrive)
                 })?;
 
-                GdriveSigner {
-                    refresh_token,
-                    client_id,
-                    client_secret,
-                    ..Default::default()
-                }
+                signer.refresh_token = refresh_token;
+                signer.client = client.clone();
+                signer.client_id = client_id;
+                signer.client_secret = client_secret;
             }
             (Some(_), Some(_)) => {
                 return Err(Error::new(
@@ -190,12 +189,44 @@ impl Builder for GdriveBuilder {
             }
         };
 
+        let signer = Arc::new(Mutex::new(signer));
         Ok(GdriveBackend {
             core: Arc::new(GdriveCore {
+                info: {
+                    let ma = AccessorInfo::default();
+                    ma.set_scheme(Scheme::Gdrive)
+                        .set_root(&root)
+                        .set_native_capability(Capability {
+                            stat: true,
+                            stat_has_content_length: true,
+                            stat_has_content_type: true,
+                            stat_has_last_modified: true,
+
+                            read: true,
+
+                            list: true,
+                            list_has_content_type: true,
+                            list_has_content_length: true,
+                            list_has_etag: true,
+
+                            write: true,
+
+                            create_dir: true,
+                            delete: true,
+                            rename: true,
+                            copy: true,
+
+                            shared: true,
+
+                            ..Default::default()
+                        });
+
+                    ma.into()
+                },
                 root,
-                signer: Arc::new(Mutex::new(signer)),
-                client,
-                path_cache: Arc::default(),
+                signer: signer.clone(),
+                client: client.clone(),
+                path_cache: PathCacher::new(GdrivePathQuery::new(client, signer)).with_lock(),
             }),
         })
     }

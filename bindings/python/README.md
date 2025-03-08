@@ -8,7 +8,7 @@ Documentation: [main](https://opendal.apache.org/docs/python/)
 
 This package intends to build a native python binding for Apache OpenDAL.
 
-![](https://github.com/apache/incubator-opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
+![](https://github.com/apache/opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
 
 ## Installation
 
@@ -41,7 +41,7 @@ async def main():
 asyncio.run(main())
 ```
 
-s3 service example: 
+s3 service example:
 ```python
 import opendal
 
@@ -70,38 +70,30 @@ asyncio.run(main())
 Setup virtualenv:
 
 ```shell
-python -m venv venv
+uv venv --python 3.10
 ```
 
-Activate venv:
+Install all the dependencies:
 
 ```shell
-source venv/bin/activate
-````
-
-Install `maturin`:
-
-```shell
-pip install maturin
-```
-
-Build bindings:
-
-```shell
-maturin develop
+uv sync --all-groups --all-extras
 ```
 
 Run some tests:
 
 ```shell
-maturin develop -E test
 # To run `test_write.py` and use `fs` operator
-OPENDAL_TEST=fs OPENDAL_FS_ROOT=/tmp pytest -vk test_write
+OPENDAL_TEST=fs OPENDAL_FS_ROOT=/tmp uv run pytest -vk test_write
 ```
 
 Build API docs:
 
 ```shell
-maturin develop -E docs
-pdoc -t ./template opendal
+uv run pdoc -t ./template opendal
 ```
+
+## License and Trademarks
+
+Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
+
+Apache OpenDAL, OpenDAL, and Apache are either registered trademarks or trademarks of the Apache Software Foundation.

@@ -24,10 +24,14 @@
 
 mod client;
 pub use client::HttpClient;
+pub use client::HttpFetch;
+
+/// temporary client used by several features
+#[allow(unused_imports)]
+pub(crate) use client::GLOBAL_REQWEST_CLIENT;
 
 mod body;
-pub use body::AsyncBody;
-pub use body::IncomingAsyncBody;
+pub use body::HttpBody;
 
 mod header;
 pub use header::build_header_value;
@@ -45,8 +49,11 @@ pub use header::parse_header_to_str;
 pub use header::parse_into_metadata;
 pub use header::parse_last_modified;
 pub use header::parse_location;
+pub use header::parse_multipart_boundary;
+pub use header::parse_prefixed_headers;
 
 mod uri;
+pub use uri::new_http_uri_invalid_error;
 pub use uri::percent_decode_path;
 pub use uri::percent_encode_path;
 
@@ -67,3 +74,4 @@ pub use multipart::FormDataPart;
 pub use multipart::MixedPart;
 pub use multipart::Multipart;
 pub use multipart::Part;
+pub use multipart::RelatedPart;

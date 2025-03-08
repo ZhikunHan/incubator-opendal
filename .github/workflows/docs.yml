@@ -21,17 +21,27 @@ on:
   push:
     branches:
       - main
+    tags:
+      - "v*"
   pull_request:
     branches:
       - main
     paths:
       - "core/**"
       - "bindings/**"
+      - "integrations/**"
+      - "website/**"
       - ".github/workflows/docs.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
+
+env:
+  # This same toolchain for rust 1.79.0 but nightly so we can use new features.
+  RUST_DOC_TOOLCHAIN: nightly-2024-06-13
+  # Enable cfg docsrs to make sure docs are built.
+  RUSTDOCFLAGS: "--cfg docsrs"
 
 jobs:
   build-rust-doc:
@@ -49,25 +59,24 @@ jobs:
 
       - name: Setup Rust Nightly
         run: |
-          rustup toolchain install nightly
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
 
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Build OpenDAL doc
-        run: cargo +nightly doc --lib --no-deps --all-features -p opendal
+        working-directory: core
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
         env:
           LD_LIBRARY_PATH: ${{ env.JAVA_HOME }}/lib/server:${{ env.LD_LIBRARY_PATH }}
-          # Enable cfg docs to make sure docs are built.
-          RUSTDOCFLAGS: "--cfg docs"
 
       - name: Upload docs
         uses: actions/upload-artifact@v4
         with:
           name: rust-docs
-          path: ./target/doc
+          path: ./core/target/doc
 
   build-java-doc:
     runs-on: ubuntu-latest
@@ -78,7 +87,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: "17"
 
       - name: Build and test
         working-directory: bindings/java
@@ -96,22 +105,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 8
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
           cache: pnpm
           cache-dependency-path: "bindings/nodejs/pnpm-lock.yaml"
       - name: Corepack
         working-directory: bindings/nodejs
-        run: corepack enable
+        run: npm i -g --force corepack && corepack enable
 
       - name: Install dependencies
         working-directory: bindings/nodejs
         run: pnpm install --frozen-lockfile
+
+      - name: Build docs theme
+        working-directory: bindings/nodejs
+        run: pnpm run build:theme
 
       - name: Build bindings/nodejs Docs
         working-directory: bindings/nodejs
@@ -131,7 +144,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
 
@@ -149,6 +162,35 @@ jobs:
         with:
           name: python-docs
           path: ./bindings/python/docs
+
+  build-ruby-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          working-directory: bindings/ruby
+          bundler-cache: true
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        # yard-rustdoc depends on a particular rust doc JSON format
+        run: |
+          rustup toolchain install nightly-2024-08-19
+
+      - name: Build Docs
+        working-directory: bindings/ruby
+        run: bundle exec rake doc
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruby-docs
+          path: ./bindings/ruby/doc
 
   build-c-doc:
     runs-on: ubuntu-latest
@@ -206,22 +248,25 @@ jobs:
           ghcup install cabal --set
           cabal update
 
+      - name: Setup cache
+        uses: actions/cache@v4
+        env:
+          cache-name: cache-cabal
+        with:
+          path: ~/.cabal
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
-
-      - name: Restore haskell cache
-        uses: actions/cache/restore@v3
-        with:
-          key: ${{ runner.os }}-haskell-${{ hashFiles('**/*.cabal', '**/Setup.hs') }}
-          path: |
-            ~/.cabal/store
-            bindings/haskell/dist-newstyle
-          restore-keys: ${{ runner.os }}-haskell-
 
       - name: Build Docs
         working-directory: "bindings/haskell"
         run: |
-          cabal haddock --haddock-html --haddock-quickjump --haddock-hyperlink-source
+          cabal haddock --haddock-html --haddock-quickjump --haddock-hyperlink-source -j
           find dist-newstyle -path '**/build/**/doc' -exec cp -r {}/html/opendal/ doc \;
 
       - name: Upload docs
@@ -260,10 +305,28 @@ jobs:
           path: ./bindings/cpp/build/docs_doxygen/html
 
   build-ocaml-doc:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Cache OPAM dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.opam
+          key: ${{ runner.os }}-opam-doc-${{ hashFiles('bindings/ocaml/dune-project') }}
+          restore-keys: |
+            ${{ runner.os }}-opam-doc-
+            ${{ runner.os }}-opam-
+
+      - name: Cache Dune build artifacts
+        uses: actions/cache@v4
+        with:
+          path: bindings/ocaml/_build
+          key: ${{ runner.os }}-dune-doc-${{ hashFiles('bindings/ocaml/**/*.{ml,mli,opam}') }}
+          restore-keys: |
+            ${{ runner.os }}-dune-doc-
+            ${{ runner.os }}-dune-
 
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
@@ -286,35 +349,209 @@ jobs:
           name: ocaml-docs
           path: ./bindings/ocaml/_build/default/_doc/_html
 
+  build-object-store-opendal-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build object-store-opendal doc
+        working-directory: "integrations/object_store"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: object-store-opendal-docs
+          path: ./integrations/object_store/target/doc
+
+  build-dav-server-opendalfs-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      # Revert to nightly after https://github.com/apache/opendal/issues/4161 addressed
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build dav-server-opendalfs doc
+        working-directory: "integrations/dav-server"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dav-server-opendalfs-docs
+          path: ./integrations/dav-server/target/doc
+
+  build-fuse3-opendal-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build fuse3-opendal doc
+        working-directory: "integrations/fuse3"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuse3-opendal-docs
+          path: ./integrations/fuse3/target/doc
+
+  build-unftp-sbe-opendal-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build unftp-sbe-opendal doc
+        working-directory: "integrations/unftp-sbe"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: unftp-sbe-opendal-docs
+          path: ./integrations/unftp-sbe/target/doc
+
+  build-virtiofs-opendal-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build virtiofs-opendal doc
+        working-directory: "integrations/virtiofs"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: virtiofs-opendal-docs
+          path: ./integrations/virtiofs/target/doc
+
+  build-parquet-opendal-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build parquet-opendal doc
+        working-directory: "integrations/parquet"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: object-parquet-docs
+          path: ./integrations/parquet/target/doc
+
+  build-opendal-compat-doc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: ./.github/actions/setup
+
+      - name: Setup Rust Nightly
+        run: |
+          rustup toolchain install ${{ env.RUST_DOC_TOOLCHAIN }}
+
+      - name: Build opendal_compat doc
+        working-directory: "integrations/compat"
+        run: cargo +${{ env.RUST_DOC_TOOLCHAIN }} doc --lib --no-deps --all-features
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendal-compat-docs
+          path: ./integrations/compat/target/doc
+
   build-website:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     needs:
       - build-rust-doc
       - build-java-doc
       - build-nodejs-doc
       - build-python-doc
+      - build-ruby-doc
       - build-c-doc
       - build-lua-doc
       - build-haskell-doc
       - build-cpp-doc
       - build-ocaml-doc
+      - build-object-store-opendal-doc
+      - build-dav-server-opendalfs-doc
+      - build-fuse3-opendal-doc
+      - build-unftp-sbe-opendal-doc
+      - build-virtiofs-opendal-doc
+      - build-parquet-opendal-doc
+      - build-opendal-compat-doc
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 8
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: "18"
           cache: pnpm
           cache-dependency-path: "website/pnpm-lock.yaml"
 
       - name: Corepack
         working-directory: website
-        run: corepack enable
+        run: npm i -g --force corepack && corepack enable
 
       - name: Download rust docs
         uses: actions/download-artifact@v4
@@ -333,6 +570,12 @@ jobs:
         with:
           name: python-docs
           path: ./website/static/docs/python
+
+      - name: Download ruby docs
+        uses: actions/download-artifact@v4
+        with:
+          name: ruby-docs
+          path: ./website/static/docs/ruby
 
       - name: Download java docs
         uses: actions/download-artifact@v4
@@ -370,6 +613,42 @@ jobs:
           name: ocaml-docs
           path: ./website/static/docs/ocaml
 
+      - name: Download object-store-opendal docs
+        uses: actions/download-artifact@v4
+        with:
+          name: object-store-opendal-docs
+          path: ./website/static/docs/object-store-opendal
+
+      - name: Download opendal_compat docs
+        uses: actions/download-artifact@v4
+        with:
+          name: opendal-compat-docs
+          path: ./website/static/docs/opendal_compat
+
+      - name: Download dav-server-opendalfs docs
+        uses: actions/download-artifact@v4
+        with:
+          name: dav-server-opendalfs-docs
+          path: ./website/static/docs/dav-server-opendalfs
+
+      - name: Download fuse3-opendal docs
+        uses: actions/download-artifact@v4
+        with:
+          name: fuse3-opendal-docs
+          path: ./website/static/docs/fuse3-opendal
+
+      - name: Download unftp-sbe-opendal docs
+        uses: actions/download-artifact@v4
+        with:
+          name: unftp-sbe-opendal-docs
+          path: ./website/static/docs/unftp-sbe-opendal
+
+      - name: Download virtiofs-opendal docs
+        uses: actions/download-artifact@v4
+        with:
+          name: virtiofs-opendal-docs
+          path: ./website/static/docs/virtiofs-opendal
+
       - name: Install Dependencies
         working-directory: website
         run: pnpm install --frozen-lockfile
@@ -382,14 +661,46 @@ jobs:
         run: cp .asf.yaml ./website/build/.asf.yaml
 
       - name: Deploy to gh-pages
-        uses: peaceiris/actions-gh-pages@v3.9.2
-        if: github.event_name == 'push' && github.ref_name == 'main'
+        uses: peaceiris/actions-gh-pages@v4.0.0
+        if: ${{ (github.event_name == 'push' && github.ref_name == 'main') || (startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'rc')) }}
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: website/build
           publish_branch: gh-pages
+          # This allows us to make our publish branch with only the latest commit.
+          force_orphan: true
 
       - name: Clear build
+        run: rm -rf ./website/build
+
+      - name: Build for staging version
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') }}
+        working-directory: website
+        run: pnpm build
+        env:
+          OPENDAL_WEBSITE_STAGING: true
+
+      - name: Copy asf file
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') }}
+        run: cp .asf.yaml ./website/build/.asf.yaml
+
+      - name: Prepare staged name
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') }}
+        run: |
+          export OPENDAL_WEBSITE_STAGED_NAME=$(echo ${{ github.ref_name }} | sed 's/[._]/-/g')
+          echo OPENDAL_WEBSITE_STAGED_NAME=${OPENDAL_WEBSITE_STAGED_NAME}
+          echo OPENDAL_WEBSITE_STAGED_NAME=${OPENDAL_WEBSITE_STAGED_NAME} >> $GITHUB_ENV
+
+      - name: Deploy to staged
+        uses: peaceiris/actions-gh-pages@v4.0.0
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: website/build
+          publish_branch: site/${{ env.OPENDAL_WEBSITE_STAGED_NAME }}-staging
+
+      - name: Clear build
+        if: ${{ startsWith(github.ref, 'refs/tags/') && contains(github.ref, 'rc') }}
         run: rm -rf ./website/build
 
       - name: Build for nightlies with tagged version
@@ -402,7 +713,7 @@ jobs:
 
       - name: Deploy to nightlies for tagged version
         uses: burnett01/rsync-deployments@5.2
-        if: "startsWith(github.ref, 'refs/tags/')"
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'rc') }}
         with:
           switches: -avzr
           path: website/build/
@@ -423,7 +734,7 @@ jobs:
 
       - name: Deploy to nightlies for stable version
         uses: burnett01/rsync-deployments@5.2
-        if: "startsWith(github.ref, 'refs/tags/')"
+        if: ${{ startsWith(github.ref, 'refs/tags/') && !contains(github.ref, 'rc') }}
         with:
           switches: -avzr --delete
           path: website/build/

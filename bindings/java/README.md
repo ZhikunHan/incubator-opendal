@@ -1,28 +1,29 @@
 # Apache OpenDAL™ Java Bindings
 
 ![](https://img.shields.io/badge/status-released-blue)
-[![Maven Central](https://img.shields.io/maven-central/v/org.apache.opendal/opendal-java.svg?logo=Apache+Maven&logoColor=blue)](https://central.sonatype.com/search?q=opendal-java&smo=true)
+[![Maven Central](https://img.shields.io/maven-central/v/org.apache.opendal/opendal.svg?logo=Apache+Maven&logoColor=blue)](https://central.sonatype.com/search?q=opendal&smo=true)
 [![Website](https://img.shields.io/badge/opendal-OpenDAL_Website-red?logo=Apache&logoColor=red)](https://opendal.apache.org/docs/java/)
 
-![](https://github.com/apache/incubator-opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
+![](https://github.com/apache/opendal/assets/5351546/87bbf6e5-f19e-449a-b368-3e283016c887)
 
 ## Example
 
 ```java
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.opendal.AsyncOperator;
 import org.apache.opendal.Operator;
 
 public class Main {
-    public static void main(String[] args) {
-        final Map<String, String> conf = new HashMap<>();
-        conf.put("root", "/tmp");
+  public static void main(String[] args) {
+    final Map<String, String> conf = new HashMap<>();
+    conf.put("root", "/tmp");
 
-        try (Operator op = Operator.of("fs", conf)) {
-            op.write("/path/to/data","Hello world").join();
-            System.out.println(new String(op.read("/path/to/data").join()));
-        }
+    try (AsyncOperator op = AsyncOperator.of("fs", conf)) {
+      op.write("/path/to/data", "Hello world").join();
+      System.out.println(new String(op.read("/path/to/data").join()));
     }
+  }
 }
 ```
 
@@ -46,18 +47,18 @@ Generally, you can first add the `os-maven-plugin` for automatically detect the 
 </build>
 ```
 
-Then add the dependency to `opendal-java` as following:
+Then add the dependency to `opendal` as following:
 
 ```xml
 <dependencies>
 <dependency>
   <groupId>org.apache.opendal</groupId>
-  <artifactId>opendal-java</artifactId>
+  <artifactId>opendal</artifactId>
   <version>${opendal.version}</version>
 </dependency>
 <dependency>
   <groupId>org.apache.opendal</groupId>
-  <artifactId>opendal-java</artifactId>
+  <artifactId>opendal</artifactId>
   <version>${opendal.version}</version>
   <classifier>${os.detected.classifier}</classifier>
 </dependency>
@@ -74,12 +75,12 @@ plugins {
 }
 ```
 
-Then add the dependency to `opendal-java` as following:
+Then add the dependency to `opendal as following:
 
 ```groovy
 dependencies {
-    implementation "org.apache.opendal:opendal-java:0.40.0"
-    implementation "org.apache.opendal:opendal-java:0.40.0:$osdetector.classifier"
+    implementation "org.apache.opendal:opendal:$opendalVersion"
+    implementation "org.apache.opendal:opendal:$opendalVersion:$osdetector.classifier"
 }
 ```
 
@@ -100,7 +101,7 @@ To load the shared library correctly, you can choose one of the following approa
 
 ## Build
 
-This project provides OpenDAL Java bindings with artifact name `opendal-java`. It depends on JDK 8 or later.
+This project provides OpenDAL Java bindings with artifact name `opendal`. It depends on JDK 8 or later.
 
 You can use Maven to build both Rust dynamic lib and JAR files with one command now:
 
@@ -156,3 +157,9 @@ export OPENDAL_REDIS_ROOT=/
 export OPENDAL_REDIS_DB=0
 ./mvnw test -Dtest="behavior.*Test" -Dcargo-build.features=services-redis
 ```
+
+## License and Trademarks
+
+Licensed under the Apache License, Version 2.0: http://www.apache.org/licenses/LICENSE-2.0
+
+Apache OpenDAL, OpenDAL, and Apache are either registered trademarks or trademarks of the Apache Software Foundation.

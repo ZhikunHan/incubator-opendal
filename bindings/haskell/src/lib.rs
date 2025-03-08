@@ -99,7 +99,7 @@ pub unsafe extern "C" fn via_map_ffi(
         }
     }
 
-    let res = match od::Operator::via_map(scheme, map) {
+    let res = match od::Operator::via_iter(scheme, map) {
         Ok(mut operator) => {
             operator = operator.layer(RetryLayer::new());
             if callback.is_some() {
@@ -160,7 +160,7 @@ pub unsafe extern "C" fn blocking_read(
     };
 
     let res = match op.read(path_str) {
-        Ok(bytes) => FFIResult::ok(ByteSlice::from_vec(bytes)),
+        Ok(bytes) => FFIResult::ok(ByteSlice::from_vec(bytes.to_vec())),
         Err(e) => FFIResult::err_with_source("Failed to read", e),
     };
 
@@ -206,7 +206,7 @@ pub unsafe extern "C" fn blocking_write(
     let bytes = Vec::from_raw_parts(bytes as *mut u8, len, len);
 
     let res = match op.write(path_str, bytes.clone()) {
-        Ok(()) => FFIResult::ok(()),
+        Ok(_) => FFIResult::ok(()),
         Err(e) => FFIResult::err_with_source("Failed to write", e),
     };
 

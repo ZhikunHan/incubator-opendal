@@ -30,12 +30,6 @@ pub struct Capability {
 
     /// If operator supports read.
     pub read: bool,
-    /// If operator supports seek on returning reader.
-    pub read_can_seek: bool,
-    /// If operator supports next on returning reader.
-    pub read_can_next: bool,
-    /// If operator supports read with range.
-    pub read_with_range: bool,
     /// If operator supports read with if match.
     pub read_with_if_match: bool,
     /// If operator supports read with if none match.
@@ -69,10 +63,6 @@ pub struct Capability {
     ///
     /// For example, AWS S3 requires at least 5MiB in write_multi expect the last one.
     pub write_multi_min_size: Option<usize>,
-    /// write_multi_align_size is the align size that services required in write_multi.
-    ///
-    /// For example, Google GCS requires align size to 256KiB in write_multi.
-    pub write_multi_align_size: Option<usize>,
     /// write_total_max_size is the max size that services support in write_total.
     ///
     /// For example, Cloudflare D1 supports 1MB as max in write_total.
@@ -107,13 +97,11 @@ pub struct Capability {
     pub presign_stat: bool,
     /// If operator supports presign write.
     pub presign_write: bool,
+    /// If operator supports presign delete.
+    pub presign_delete: bool,
 
-    /// If operator supports batch.
-    pub batch: bool,
-    /// If operator supports batch delete.
-    pub batch_delete: bool,
-    /// The max operations that operator supports in batch.
-    pub batch_max_operations: Option<usize>,
+    /// If operator supports shared.
+    pub shared: bool,
 
     /// If operator supports blocking.
     pub blocking: bool,
@@ -126,9 +114,6 @@ impl Capability {
             stat_with_if_match: capability.stat_with_if_match,
             stat_with_if_none_match: capability.stat_with_if_none_match,
             read: capability.read,
-            read_can_seek: capability.read_can_seek,
-            read_can_next: capability.read_can_next,
-            read_with_range: capability.read_with_range,
             read_with_if_match: capability.read_with_if_match,
             read_with_if_none_match: capability.read_with_if_none_match,
             read_with_override_cache_control: capability.read_with_override_cache_control,
@@ -144,7 +129,6 @@ impl Capability {
             write_with_cache_control: capability.write_with_cache_control,
             write_multi_max_size: capability.write_multi_max_size,
             write_multi_min_size: capability.write_multi_min_size,
-            write_multi_align_size: capability.write_multi_align_size,
             write_total_max_size: capability.write_total_max_size,
             create_dir: capability.create_dir,
             delete: capability.delete,
@@ -158,9 +142,8 @@ impl Capability {
             presign_read: capability.presign_read,
             presign_stat: capability.presign_stat,
             presign_write: capability.presign_write,
-            batch: capability.batch,
-            batch_delete: capability.batch_delete,
-            batch_max_operations: capability.batch_max_operations,
+            presign_delete: capability.presign_delete,
+            shared: capability.shared,
             blocking: capability.blocking,
         }
     }

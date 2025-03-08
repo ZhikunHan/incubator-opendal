@@ -8,25 +8,17 @@ NOTES: all scripts must be running at root folder of OpenDAL project.
 ## Release
 
 ```shell
-OPENDAL_VERSION=0.30.2 OPENDAL_VERSION_RC=rc1 ./scripts/release.sh
+just release
 ```
 
 > Before running release, please make sure you have bump all versions.
-
-## Check
-
-```shell
-./scripts/check.sh apache-opendal-incubating-0.33.3-src.tar.gz
-```
-
-> Before running the check, please ensure that you have completed the following preparations.
 
 ### Preparations
 
 Import gpg key
 
 ```shell
-curl https://downloads.apache.org/incubator/opendal/KEYS > KEYS # Download KEYS
+curl https://downloads.apache.org/opendal/KEYS > KEYS # Download KEYS
 gpg --import KEYS # Import KEYS to local
 ```
 

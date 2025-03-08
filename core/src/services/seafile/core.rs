@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use bytes::Buf;
 use bytes::Bytes;
 use http::header;
 use http::Request;
@@ -34,6 +35,7 @@ use crate::*;
 /// Core of [seafile](https://www.seafile.com) services support.
 #[derive(Clone)]
 pub struct SeafileCore {
+    pub info: Arc<AccessorInfo>,
     /// The root of this core.
     pub root: String,
     /// The endpoint of this backend.
@@ -64,7 +66,7 @@ impl Debug for SeafileCore {
 
 impl SeafileCore {
     #[inline]
-    pub async fn send(&self, req: Request<AsyncBody>) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn send(&self, req: Request<Buffer>) -> Result<Response<Buffer>> {
         self.client.send(req).await
     }
 
@@ -88,7 +90,7 @@ impl SeafileCore {
             );
             let req = Request::post(format!("{}/api2/auth-token/", self.endpoint))
                 .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .body(AsyncBody::Bytes(Bytes::from(body)))
+                .body(Buffer::from(Bytes::from(body)))
                 .map_err(new_request_build_error)?;
 
             let resp = self.client.send(req).await?;
@@ -96,16 +98,17 @@ impl SeafileCore {
 
             match status {
                 StatusCode::OK => {
-                    let resp_body = &resp.into_body().bytes().await?;
-                    let auth_response = serde_json::from_slice::<AuthTokenResponse>(resp_body)
-                        .map_err(new_json_deserialize_error)?;
+                    let resp_body = resp.into_body();
+                    let auth_response: AuthTokenResponse =
+                        serde_json::from_reader(resp_body.reader())
+                            .map_err(new_json_deserialize_error)?;
                     signer.auth_info = AuthInfo {
                         token: auth_response.token,
                         repo_id: "".to_string(),
                     };
                 }
                 _ => {
-                    return Err(parse_error(resp).await?);
+                    return Err(parse_error(resp));
                 }
             }
 
@@ -116,7 +119,7 @@ impl SeafileCore {
                     header::AUTHORIZATION,
                     format!("Token {}", signer.auth_info.token),
                 )
-                .body(AsyncBody::Empty)
+                .body(Buffer::new())
                 .map_err(new_request_build_error)?;
 
             let resp = self.client.send(req).await?;
@@ -125,9 +128,9 @@ impl SeafileCore {
 
             match status {
                 StatusCode::OK => {
-                    let resp_body = &resp.into_body().bytes().await?;
-                    let list_library_response =
-                        serde_json::from_slice::<Vec<ListLibraryResponse>>(resp_body)
+                    let resp_body = resp.into_body();
+                    let list_library_response: Vec<ListLibraryResponse> =
+                        serde_json::from_reader(resp_body.reader())
                             .map_err(new_json_deserialize_error)?;
 
                     for library in list_library_response {
@@ -141,12 +144,12 @@ impl SeafileCore {
                     if signer.auth_info.repo_id.is_empty() {
                         return Err(Error::new(
                             ErrorKind::NotFound,
-                            &format!("repo {} not found", self.repo_name),
+                            format!("repo {} not found", self.repo_name),
                         ));
                     }
                 }
                 _ => {
-                    return Err(parse_error(resp).await?);
+                    return Err(parse_error(resp));
                 }
             }
             Ok(signer.auth_info.clone())
@@ -166,7 +169,7 @@ impl SeafileCore {
 
         let req = req
             .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         let resp = self.send(req).await?;
@@ -174,12 +177,12 @@ impl SeafileCore {
 
         match status {
             StatusCode::OK => {
-                let resp_body = &resp.into_body().bytes().await?;
-                let upload_url = serde_json::from_slice::<String>(resp_body)
+                let resp_body = resp.into_body();
+                let upload_url = serde_json::from_reader(resp_body.reader())
                     .map_err(new_json_deserialize_error)?;
                 Ok(upload_url)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -197,7 +200,7 @@ impl SeafileCore {
 
         let req = req
             .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         let resp = self.send(req).await?;
@@ -205,33 +208,28 @@ impl SeafileCore {
 
         match status {
             StatusCode::OK => {
-                let resp_body = &resp.into_body().bytes().await?;
-                let download_url = serde_json::from_slice::<String>(resp_body)
+                let resp_body = resp.into_body();
+                let download_url = serde_json::from_reader(resp_body.reader())
                     .map_err(new_json_deserialize_error)?;
 
                 Ok(download_url)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
     /// download file
-    pub async fn download_file(&self, path: &str) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn download_file(&self, path: &str, range: BytesRange) -> Result<Response<HttpBody>> {
         let download_url = self.get_download_url(path).await?;
 
         let req = Request::get(download_url);
 
         let req = req
-            .body(AsyncBody::Empty)
+            .header(header::RANGE, range.to_header())
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
-        let resp = self.send(req).await?;
-        let status = resp.status();
-
-        match status {
-            StatusCode::OK => Ok(resp),
-            _ => Err(parse_error(resp).await?),
-        }
+        self.client.fetch(req).await
     }
 
     /// file detail
@@ -248,7 +246,7 @@ impl SeafileCore {
 
         let req = req
             .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         let resp = self.send(req).await?;
@@ -256,12 +254,12 @@ impl SeafileCore {
 
         match status {
             StatusCode::OK => {
-                let resp_body = &resp.into_body().bytes().await?;
-                let file_detail = serde_json::from_slice::<FileDetail>(resp_body)
+                let resp_body = resp.into_body();
+                let file_detail: FileDetail = serde_json::from_reader(resp_body.reader())
                     .map_err(new_json_deserialize_error)?;
                 Ok(file_detail)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -279,7 +277,7 @@ impl SeafileCore {
 
         let req = req
             .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         let resp = self.send(req).await?;
@@ -287,42 +285,12 @@ impl SeafileCore {
 
         match status {
             StatusCode::OK => {
-                let resp_body = &resp.into_body().bytes().await?;
-                let dir_detail = serde_json::from_slice::<DirDetail>(resp_body)
+                let resp_body = resp.into_body();
+                let dir_detail: DirDetail = serde_json::from_reader(resp_body.reader())
                     .map_err(new_json_deserialize_error)?;
                 Ok(dir_detail)
             }
-            _ => Err(parse_error(resp).await?),
-        }
-    }
-
-    /// create dir
-    pub async fn create_dir(&self, path: &str) -> Result<()> {
-        let path = build_abs_path(&self.root, path);
-        let path = format!("/{}", &path[..path.len() - 1]);
-        let path = percent_encode_path(&path);
-
-        let auth_info = self.get_auth_info().await?;
-
-        let req = Request::post(format!(
-            "{}/api2/repos/{}/dir/?p={}",
-            self.endpoint, auth_info.repo_id, path,
-        ));
-
-        let body = "operation=mkdir".to_string();
-
-        let req = req
-            .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
-            .body(AsyncBody::Bytes(Bytes::from(body)))
-            .map_err(new_request_build_error)?;
-
-        let resp = self.send(req).await?;
-        let status = resp.status();
-
-        match status {
-            StatusCode::CREATED => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -349,7 +317,7 @@ impl SeafileCore {
 
         let req = req
             .header(header::AUTHORIZATION, format!("Token {}", auth_info.token))
-            .body(AsyncBody::Empty)
+            .body(Buffer::new())
             .map_err(new_request_build_error)?;
 
         let resp = self.send(req).await?;
@@ -358,7 +326,7 @@ impl SeafileCore {
 
         match status {
             StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 }

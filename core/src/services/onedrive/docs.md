@@ -7,7 +7,6 @@ This service can be used to:
 - [x] list
 - [ ] copy
 - [ ] rename
-- [ ] ~~scan~~
 - [ ] ~~presign~~
 - [ ] blocking
 
@@ -26,7 +25,7 @@ You can refer to [`OnedriveBuilder`]'s docs for more information
 
 ### Via Builder
 
-```rust
+```rust,no_run
 use anyhow::Result;
 use opendal::services::Onedrive;
 use opendal::Operator;
@@ -34,9 +33,9 @@ use opendal::Operator;
 #[tokio::main]
 async fn main() -> Result<()> {
     // create backend builder
-    let mut builder = Onedrive::default();
-
-    builder.access_token("xxx").root("/path/to/root");
+    let mut builder = Onedrive::default()
+        .access_token("xxx")
+        .root("/path/to/root");
 
     let op: Operator = Operator::new(builder)?.finish();
     Ok(())

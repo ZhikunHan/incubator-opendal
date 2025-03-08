@@ -17,16 +17,14 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use http::StatusCode;
+use http::{HeaderMap, HeaderValue, StatusCode};
 
 use super::core::*;
 use super::error::parse_error;
 use crate::raw::*;
 use crate::*;
 
-pub type OssWriters =
-    TwoWays<oio::MultipartUploadWriter<OssWriter>, oio::AppendObjectWriter<OssWriter>>;
+pub type OssWriters = TwoWays<oio::MultipartWriter<OssWriter>, oio::AppendWriter<OssWriter>>;
 
 pub struct OssWriter {
     core: Arc<OssCore>,
@@ -43,11 +41,25 @@ impl OssWriter {
             op,
         }
     }
+
+    fn parse_metadata(headers: &HeaderMap<HeaderValue>) -> Result<Metadata> {
+        let mut meta = Metadata::default();
+        if let Some(etag) = parse_etag(headers)? {
+            meta.set_etag(etag);
+        }
+        if let Some(md5) = parse_content_md5(headers)? {
+            meta.set_content_md5(md5);
+        }
+        if let Some(version) = parse_header_to_str(headers, constants::X_OSS_VERSION_ID)? {
+            meta.set_version(version);
+        }
+
+        Ok(meta)
+    }
 }
 
-#[async_trait]
-impl oio::MultipartUploadWrite for OssWriter {
-    async fn write_once(&self, size: u64, body: AsyncBody) -> Result<()> {
+impl oio::MultipartWrite for OssWriter {
+    async fn write_once(&self, size: u64, body: Buffer) -> Result<Metadata> {
         let mut req =
             self.core
                 .oss_put_object_request(&self.path, Some(size), &self.op, body, false)?;
@@ -56,14 +68,12 @@ impl oio::MultipartUploadWrite for OssWriter {
 
         let resp = self.core.send(req).await?;
 
+        let meta = Self::parse_metadata(resp.headers())?;
         let status = resp.status();
 
         match status {
-            StatusCode::CREATED | StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::CREATED | StatusCode::OK => Ok(meta),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -83,7 +93,7 @@ impl oio::MultipartUploadWrite for OssWriter {
 
         match status {
             StatusCode::OK => {
-                let bs = resp.into_body().bytes().await?;
+                let bs = resp.into_body();
 
                 let result: InitiateMultipartUploadResult =
                     quick_xml::de::from_reader(bytes::Buf::reader(bs))
@@ -91,7 +101,7 @@ impl oio::MultipartUploadWrite for OssWriter {
 
                 Ok(result.upload_id)
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -100,8 +110,8 @@ impl oio::MultipartUploadWrite for OssWriter {
         upload_id: &str,
         part_number: usize,
         size: u64,
-        body: AsyncBody,
-    ) -> Result<oio::MultipartUploadPart> {
+        body: Buffer,
+    ) -> Result<oio::MultipartPart> {
         // OSS requires part number must between [1..=10000]
         let part_number = part_number + 1;
 
@@ -123,19 +133,21 @@ impl oio::MultipartUploadWrite for OssWriter {
                     })?
                     .to_string();
 
-                resp.into_body().consume().await?;
-
-                Ok(oio::MultipartUploadPart { part_number, etag })
+                Ok(oio::MultipartPart {
+                    part_number,
+                    etag,
+                    checksum: None,
+                })
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
     async fn complete_part(
         &self,
         upload_id: &str,
-        parts: &[oio::MultipartUploadPart],
-    ) -> Result<()> {
+        parts: &[oio::MultipartPart],
+    ) -> Result<Metadata> {
         let parts = parts
             .iter()
             .map(|p| MultipartUploadPart {
@@ -149,15 +161,12 @@ impl oio::MultipartUploadWrite for OssWriter {
             .oss_complete_multipart_upload_request(&self.path, upload_id, false, parts)
             .await?;
 
+        let meta = Self::parse_metadata(resp.headers())?;
         let status = resp.status();
 
         match status {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(meta),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -168,19 +177,18 @@ impl oio::MultipartUploadWrite for OssWriter {
             .await?;
         match resp.status() {
             // OSS returns code 204 if abort succeeds.
-            StatusCode::NO_CONTENT => {
-                resp.into_body().consume().await?;
-                Ok(())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::NO_CONTENT => Ok(()),
+            _ => Err(parse_error(resp)),
         }
     }
 }
 
-#[async_trait]
-impl oio::AppendObjectWrite for OssWriter {
+impl oio::AppendWrite for OssWriter {
     async fn offset(&self) -> Result<u64> {
-        let resp = self.core.oss_head_object(&self.path, None, None).await?;
+        let resp = self
+            .core
+            .oss_head_object(&self.path, &OpStat::new())
+            .await?;
 
         let status = resp.status();
         match status {
@@ -194,11 +202,11 @@ impl oio::AppendObjectWrite for OssWriter {
                 Ok(content_length)
             }
             StatusCode::NOT_FOUND => Ok(0),
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
-    async fn append(&self, offset: u64, size: u64, body: AsyncBody) -> Result<()> {
+    async fn append(&self, offset: u64, size: u64, body: Buffer) -> Result<Metadata> {
         let mut req = self
             .core
             .oss_append_object_request(&self.path, offset, size, &self.op, body)?;
@@ -207,11 +215,12 @@ impl oio::AppendObjectWrite for OssWriter {
 
         let resp = self.core.send(req).await?;
 
+        let meta = Self::parse_metadata(resp.headers())?;
         let status = resp.status();
 
         match status {
-            StatusCode::OK => Ok(()),
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(meta),
+            _ => Err(parse_error(resp)),
         }
     }
 }

@@ -15,11 +15,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
-use async_trait::async_trait;
 use http::header;
 use http::header::IF_MATCH;
 use http::header::IF_NONE_MATCH;
@@ -27,36 +26,19 @@ use http::Request;
 use http::Response;
 use http::StatusCode;
 use log::debug;
-use serde::Deserialize;
 
 use super::error::parse_error;
 use crate::raw::*;
+use crate::services::HttpConfig;
 use crate::*;
 
-/// Config for Http service support.
-#[derive(Default, Deserialize)]
-#[serde(default)]
-#[non_exhaustive]
-pub struct HttpConfig {
-    /// endpoint of this backend
-    pub endpoint: Option<String>,
-    /// username of this backend
-    pub username: Option<String>,
-    /// password of this backend
-    pub password: Option<String>,
-    /// token of this backend
-    pub token: Option<String>,
-    /// root of this backend
-    pub root: Option<String>,
-}
-
-impl Debug for HttpConfig {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut de = f.debug_struct("HttpConfig");
-        de.field("endpoint", &self.endpoint);
-        de.field("root", &self.root);
-
-        de.finish_non_exhaustive()
+impl Configurator for HttpConfig {
+    type Builder = HttpBuilder;
+    fn into_builder(self) -> Self::Builder {
+        HttpBuilder {
+            config: self,
+            http_client: None,
+        }
     }
 }
 
@@ -80,7 +62,7 @@ impl HttpBuilder {
     /// Set endpoint for http backend.
     ///
     /// For example: `https://example.com`
-    pub fn endpoint(&mut self, endpoint: &str) -> &mut Self {
+    pub fn endpoint(mut self, endpoint: &str) -> Self {
         self.config.endpoint = if endpoint.is_empty() {
             None
         } else {
@@ -90,10 +72,10 @@ impl HttpBuilder {
         self
     }
 
-    /// set password for http backend
+    /// set username for http backend
     ///
-    /// default: no password
-    pub fn username(&mut self, username: &str) -> &mut Self {
+    /// default: no username
+    pub fn username(mut self, username: &str) -> Self {
         if !username.is_empty() {
             self.config.username = Some(username.to_owned());
         }
@@ -103,7 +85,7 @@ impl HttpBuilder {
     /// set password for http backend
     ///
     /// default: no password
-    pub fn password(&mut self, password: &str) -> &mut Self {
+    pub fn password(mut self, password: &str) -> Self {
         if !password.is_empty() {
             self.config.password = Some(password.to_owned());
         }
@@ -113,15 +95,15 @@ impl HttpBuilder {
     /// set bearer token for http backend
     ///
     /// default: no access token
-    pub fn token(&mut self, token: &str) -> &mut Self {
+    pub fn token(mut self, token: &str) -> Self {
         if !token.is_empty() {
-            self.config.token = Some(token.to_owned());
+            self.config.token = Some(token.to_string());
         }
         self
     }
 
     /// Set root path of http backend.
-    pub fn root(&mut self, root: &str) -> &mut Self {
+    pub fn root(mut self, root: &str) -> Self {
         self.config.root = if root.is_empty() {
             None
         } else {
@@ -137,7 +119,7 @@ impl HttpBuilder {
     ///
     /// This API is part of OpenDAL's Raw API. `HttpClient` could be changed
     /// during minor updates.
-    pub fn http_client(&mut self, client: HttpClient) -> &mut Self {
+    pub fn http_client(mut self, client: HttpClient) -> Self {
         self.http_client = Some(client);
         self
     }
@@ -145,19 +127,9 @@ impl HttpBuilder {
 
 impl Builder for HttpBuilder {
     const SCHEME: Scheme = Scheme::Http;
-    type Accessor = HttpBackend;
+    type Config = HttpConfig;
 
-    fn from_map(map: HashMap<String, String>) -> Self {
-        let config = HttpConfig::deserialize(ConfigDeserializer::new(map))
-            .expect("config deserialize must succeed");
-
-        HttpBuilder {
-            config,
-            http_client: None,
-        }
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
+    fn build(self) -> Result<impl Access> {
         debug!("backend build started: {:?}", &self);
 
         let endpoint = match &self.config.endpoint {
@@ -168,10 +140,10 @@ impl Builder for HttpBuilder {
             }
         };
 
-        let root = normalize_root(&self.config.root.take().unwrap_or_default());
+        let root = normalize_root(&self.config.root.unwrap_or_default());
         debug!("backend use root {}", root);
 
-        let client = if let Some(client) = self.http_client.take() {
+        let client = if let Some(client) = self.http_client {
             client
         } else {
             HttpClient::new().map_err(|err| {
@@ -191,8 +163,41 @@ impl Builder for HttpBuilder {
             auth = Some(format_authorization_by_bearer(token)?)
         }
 
-        debug!("backend build finished: {:?}", &self);
         Ok(HttpBackend {
+            info: {
+                let ma = AccessorInfo::default();
+                ma.set_scheme(Scheme::Http)
+                    .set_root(&root)
+                    .set_native_capability(Capability {
+                        stat: true,
+                        stat_with_if_match: true,
+                        stat_with_if_none_match: true,
+                        stat_has_cache_control: true,
+                        stat_has_content_length: true,
+                        stat_has_content_type: true,
+                        stat_has_content_encoding: true,
+                        stat_has_content_range: true,
+                        stat_has_etag: true,
+                        stat_has_content_md5: true,
+                        stat_has_last_modified: true,
+                        stat_has_content_disposition: true,
+
+                        read: true,
+
+                        read_with_if_match: true,
+                        read_with_if_none_match: true,
+
+                        presign: auth.is_none(),
+                        presign_read: auth.is_none(),
+                        presign_stat: auth.is_none(),
+
+                        shared: true,
+
+                        ..Default::default()
+                    });
+
+                ma.into()
+            },
             endpoint: endpoint.to_string(),
             authorization: auth,
             root,
@@ -204,6 +209,8 @@ impl Builder for HttpBuilder {
 /// Backend is used to serve `Accessor` support for http.
 #[derive(Clone)]
 pub struct HttpBackend {
+    info: Arc<AccessorInfo>,
+
     endpoint: String,
     root: String,
     client: HttpClient,
@@ -221,34 +228,18 @@ impl Debug for HttpBackend {
     }
 }
 
-#[async_trait]
-impl Accessor for HttpBackend {
-    type Reader = IncomingAsyncBody;
+impl Access for HttpBackend {
+    type Reader = HttpBody;
     type Writer = ();
     type Lister = ();
+    type Deleter = ();
     type BlockingReader = ();
     type BlockingWriter = ();
     type BlockingLister = ();
+    type BlockingDeleter = ();
 
-    fn info(&self) -> AccessorInfo {
-        let mut ma = AccessorInfo::default();
-        ma.set_scheme(Scheme::Http)
-            .set_root(&self.root)
-            .set_native_capability(Capability {
-                stat: true,
-                stat_with_if_match: true,
-                stat_with_if_none_match: true,
-
-                read: true,
-                read_can_next: true,
-                read_with_range: true,
-                read_with_if_match: true,
-                read_with_if_none_match: true,
-
-                ..Default::default()
-            });
-
-        ma
+    fn info(&self) -> Arc<AccessorInfo> {
+        self.info.clone()
     }
 
     async fn stat(&self, path: &str, args: OpStat) -> Result<RpStat> {
@@ -268,35 +259,67 @@ impl Accessor for HttpBackend {
             StatusCode::NOT_FOUND | StatusCode::FORBIDDEN if path.ends_with('/') => {
                 Ok(RpStat::new(Metadata::new(EntryMode::DIR)))
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
     async fn read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::Reader)> {
-        let resp = self.http_get(path, &args).await?;
+        let resp = self.http_get(path, args.range(), &args).await?;
 
         let status = resp.status();
 
         match status {
             StatusCode::OK | StatusCode::PARTIAL_CONTENT => {
-                let size = parse_content_length(resp.headers())?;
-                let range = parse_content_range(resp.headers())?;
-                Ok((
-                    RpRead::new().with_size(size).with_range(range),
-                    resp.into_body(),
+                Ok((RpRead::default(), resp.into_body()))
+            }
+            _ => {
+                let (part, mut body) = resp.into_parts();
+                let buf = body.to_buffer().await?;
+                Err(parse_error(Response::from_parts(part, buf)))
+            }
+        }
+    }
+
+    async fn presign(&self, path: &str, args: OpPresign) -> Result<RpPresign> {
+        if self.has_authorization() {
+            return Err(Error::new(
+                ErrorKind::Unsupported,
+                "Http doesn't support presigned request on backend with authorization",
+            ));
+        }
+
+        let req = match args.operation() {
+            PresignOperation::Stat(v) => self.http_head_request(path, v)?,
+            PresignOperation::Read(v) => self.http_get_request(path, BytesRange::default(), v)?,
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::Unsupported,
+                    "Http doesn't support presigned write",
                 ))
             }
-            StatusCode::RANGE_NOT_SATISFIABLE => {
-                resp.into_body().consume().await?;
-                Ok((RpRead::new().with_size(Some(0)), IncomingAsyncBody::empty()))
-            }
-            _ => Err(parse_error(resp).await?),
-        }
+        };
+
+        let (parts, _) = req.into_parts();
+
+        Ok(RpPresign::new(PresignedRequest::new(
+            parts.method,
+            parts.uri,
+            parts.headers,
+        )))
     }
 }
 
 impl HttpBackend {
-    async fn http_get(&self, path: &str, args: &OpRead) -> Result<Response<IncomingAsyncBody>> {
+    pub fn has_authorization(&self) -> bool {
+        self.authorization.is_some()
+    }
+
+    pub fn http_get_request(
+        &self,
+        path: &str,
+        range: BytesRange,
+        args: &OpRead,
+    ) -> Result<Request<Buffer>> {
         let p = build_rooted_abs_path(&self.root, path);
 
         let url = format!("{}{}", self.endpoint, percent_encode_path(&p));
@@ -315,18 +338,24 @@ impl HttpBackend {
             req = req.header(header::AUTHORIZATION, auth.clone())
         }
 
-        if !args.range().is_full() {
-            req = req.header(header::RANGE, args.range().to_header());
+        if !range.is_full() {
+            req = req.header(header::RANGE, range.to_header());
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
-
-        self.client.send(req).await
+        req.body(Buffer::new()).map_err(new_request_build_error)
     }
 
-    async fn http_head(&self, path: &str, args: &OpStat) -> Result<Response<IncomingAsyncBody>> {
+    pub async fn http_get(
+        &self,
+        path: &str,
+        range: BytesRange,
+        args: &OpRead,
+    ) -> Result<Response<HttpBody>> {
+        let req = self.http_get_request(path, range, args)?;
+        self.client.fetch(req).await
+    }
+
+    pub fn http_head_request(&self, path: &str, args: &OpStat) -> Result<Request<Buffer>> {
         let p = build_rooted_abs_path(&self.root, path);
 
         let url = format!("{}{}", self.endpoint, percent_encode_path(&p));
@@ -345,206 +374,11 @@ impl HttpBackend {
             req = req.header(header::AUTHORIZATION, auth.clone())
         }
 
-        let req = req
-            .body(AsyncBody::Empty)
-            .map_err(new_request_build_error)?;
+        req.body(Buffer::new()).map_err(new_request_build_error)
+    }
 
+    async fn http_head(&self, path: &str, args: &OpStat) -> Result<Response<Buffer>> {
+        let req = self.http_head_request(path, args)?;
         self.client.send(req).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use anyhow::Result;
-    use wiremock::matchers::basic_auth;
-    use wiremock::matchers::bearer_token;
-    use wiremock::matchers::headers;
-    use wiremock::matchers::method;
-    use wiremock::matchers::path;
-    use wiremock::Mock;
-    use wiremock::MockServer;
-    use wiremock::ResponseTemplate;
-
-    use super::*;
-    use crate::Operator;
-
-    #[tokio::test]
-    async fn test_read() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/hello"))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-length", "13")
-                    .set_body_string("Hello, World!"),
-            )
-            .mount(&mock_server)
-            .await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "13"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        let op = Operator::new(builder)?.finish();
-
-        let bs = op.read("hello").await?;
-
-        assert_eq!(bs, b"Hello, World!");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_read_via_basic_auth() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let (username, password) = ("your_username", "your_password");
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/hello"))
-            .and(basic_auth(username, password))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-length", "13")
-                    .set_body_string("Hello, World!"),
-            )
-            .mount(&mock_server)
-            .await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .and(basic_auth(username, password))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "13"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        builder.username(username).password(password);
-        let op = Operator::new(builder)?.finish();
-
-        let bs = op.read("hello").await?;
-
-        assert_eq!(bs, b"Hello, World!");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_read_via_bearer_auth() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let token = "your_token";
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/hello"))
-            .and(bearer_token(token))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-length", "13")
-                    .set_body_string("Hello, World!"),
-            )
-            .mount(&mock_server)
-            .await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .and(bearer_token(token))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "13"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        builder.token(token);
-        let op = Operator::new(builder)?.finish();
-
-        let bs = op.read("hello").await?;
-
-        assert_eq!(bs, b"Hello, World!");
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_stat() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "128"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        let op = Operator::new(builder)?.finish();
-        let bs = op.stat("hello").await?;
-
-        assert_eq!(bs.mode(), EntryMode::FILE);
-        assert_eq!(bs.content_length(), 128);
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_read_with() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("GET"))
-            .and(path("/hello"))
-            .and(headers("if-none-match", vec!["*"]))
-            .respond_with(
-                ResponseTemplate::new(200)
-                    .insert_header("content-length", "13")
-                    .set_body_string("Hello, World!"),
-            )
-            .mount(&mock_server)
-            .await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "13"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        let op = Operator::new(builder)?.finish();
-
-        let match_bs = op.read_with("hello").if_none_match("*").await?;
-        assert_eq!(match_bs, b"Hello, World!");
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_stat_with() -> Result<()> {
-        let _ = tracing_subscriber::fmt().with_test_writer().try_init();
-
-        let mock_server = MockServer::start().await;
-        Mock::given(method("HEAD"))
-            .and(path("/hello"))
-            .and(headers("if-none-match", vec!["*"]))
-            .respond_with(ResponseTemplate::new(200).insert_header("content-length", "128"))
-            .mount(&mock_server)
-            .await;
-
-        let mut builder = HttpBuilder::default();
-        builder.endpoint(&mock_server.uri());
-        builder.root("/");
-        let op = Operator::new(builder)?.finish();
-        let bs = op.stat_with("hello").if_none_match("*").await?;
-
-        assert_eq!(bs.mode(), EntryMode::FILE);
-        assert_eq!(bs.content_length(), 128);
-        Ok(())
     }
 }

@@ -56,10 +56,8 @@ let test_operator_reader test_ctxt =
     (test_check_result
        (Operator.write bo "tempfile" (Bytes.of_string "helloworld")));
   let reader = Operator.reader bo "tempfile" |> test_check_result in
-  let s = Operator.Reader.seek reader 5L SEEK_CUR |> test_check_result in
-  assert_equal 5 (Int64.to_int s);
   let data = Bytes.create 5 in
-  let i = Operator.Reader.read reader data |> test_check_result in
+  let i = Operator.Reader.pread reader data 5L |> test_check_result in
   assert_equal 5 i;
   assert_equal "world" (Bytes.to_string data)
 
@@ -85,10 +83,10 @@ let test_list test_ctxt =
        (Operator.write bo "/testdir/bar" (Bytes.of_string "foo")));
   let array = Operator.list bo "testdir/" |> test_check_result in
   let actual = Array.map Operator.Entry.name array in
-  let expected = [| "foo"; "bar" |] in
+  let expected = [| "testdir/"; "foo"; "bar" |] in
   List.iter (Array.sort compare) [ expected; actual ];
   assert_equal expected actual;
-  assert_equal 2 (Array.length array);
+  assert_equal 3 (Array.length array);
   ()
 
 let suite =

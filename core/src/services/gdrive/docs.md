@@ -7,9 +7,9 @@ This service can be used to:
 - [x] write
 - [x] delete
 - [x] create_dir
-- [ ] list
-- [ ] copy
-- [ ] rename
+- [x] list
+- [x] copy
+- [x] rename
 - [ ] batch
 
 
@@ -49,16 +49,16 @@ You can refer to [`GdriveBuilder`]'s docs for more information
 
 ### Via Builder
 
-```rust
+```rust,no_run
 use anyhow::Result;
 use opendal::services::Gdrive;
 use opendal::Operator;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let mut builder = Gdrive::default();
-    builder.root("/test");
-    builder.access_token("<token>");
+    let mut builder = Gdrive::default()
+        .root("/test")
+        .access_token("<token>");
 
     Ok(())
 }

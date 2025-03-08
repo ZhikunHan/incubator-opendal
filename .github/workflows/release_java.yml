@@ -15,14 +15,14 @@
 # specific language governing permissions and limitations
 # under the License.
 
-name: Bindings Java Release
+name: Release Java Binding
 
 on:
   push:
     tags:
       # Staging JARs on Apache Nexus repository for RCs. Read more on
-      # https://opendal.apache.org/docs/contributing/release#release-maven-artifacts
-      - 'v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+'
+      # https://opendal.apache.org/community/committers/release/#release-maven-artifacts
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
   pull_request:
     branches:
       - main
@@ -52,9 +52,9 @@ jobs:
       - name: Set up JDK 8
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '8'
-          cache: 'maven'
+          distribution: "zulu"
+          java-version: "8"
+          cache: "maven"
           server-id: apache.releases.https
           server-username: MAVEN_USERNAME
           server-password: MAVEN_CENTRAL_TOKEN
@@ -62,9 +62,9 @@ jobs:
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.11"
       - name: Install Protoc
-        uses: arduino/setup-protoc@v2
+        uses: arduino/setup-protoc@v3
         with:
           version: "23.4"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
@@ -105,6 +105,7 @@ jobs:
           name: ${{ matrix.classifier }}-local-staging
           path: bindings/java/local-staging
           if-no-files-found: error
+          include-hidden-files: true
 
   deploy-staged-snapshots:
     runs-on: ubuntu-latest
@@ -112,14 +113,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: apache/incubator-opendal
+          repository: apache/opendal
           ref: ${{ inputs.ref }}
       - name: Set up JDK 8
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '8'
-          cache: 'maven'
+          distribution: "zulu"
+          java-version: "8"
+          cache: "maven"
           server-id: apache.releases.https
           server-username: MAVEN_USERNAME
           server-password: MAVEN_CENTRAL_TOKEN

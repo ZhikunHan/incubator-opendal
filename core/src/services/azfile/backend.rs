@@ -15,12 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use async_trait::async_trait;
+use http::Response;
 use http::StatusCode;
 use log::debug;
 use reqsign::AzureStorageConfig;
@@ -28,42 +27,41 @@ use reqsign::AzureStorageLoader;
 use reqsign::AzureStorageSigner;
 
 use super::core::AzfileCore;
+use super::delete::AzfileDeleter;
 use super::error::parse_error;
+use super::lister::AzfileLister;
 use super::writer::AzfileWriter;
 use super::writer::AzfileWriters;
 use crate::raw::*;
-use crate::services::azfile::lister::AzfileLister;
+use crate::services::AzfileConfig;
 use crate::*;
 
 /// Default endpoint of Azure File services.
 const DEFAULT_AZFILE_ENDPOINT_SUFFIX: &str = "file.core.windows.net";
 
+impl Configurator for AzfileConfig {
+    type Builder = AzfileBuilder;
+    fn into_builder(self) -> Self::Builder {
+        AzfileBuilder {
+            config: self,
+            http_client: None,
+        }
+    }
+}
+
 /// Azure File services support.
 #[doc = include_str!("docs.md")]
 #[derive(Default, Clone)]
 pub struct AzfileBuilder {
-    root: Option<String>,
-    endpoint: Option<String>,
-    account_name: Option<String>,
-    share_name: String,
-    account_key: Option<String>,
-    sas_token: Option<String>,
+    config: AzfileConfig,
     http_client: Option<HttpClient>,
 }
 
 impl Debug for AzfileBuilder {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut ds = f.debug_struct("Builder");
+        let mut ds = f.debug_struct("AzfileBuilder");
 
-        ds.field("root", &self.root);
-        ds.field("endpoint", &self.endpoint);
-        ds.field("share_name", &self.share_name);
-        if self.account_name.is_some() {
-            ds.field("account_name", &"<redacted>");
-        }
-        if self.account_key.is_some() {
-            ds.field("account_key", &"<redacted>");
-        }
+        ds.field("config", &self.config);
 
         ds.finish()
     }
@@ -73,19 +71,21 @@ impl AzfileBuilder {
     /// Set root of this backend.
     ///
     /// All operations will happen under this root.
-    pub fn root(&mut self, root: &str) -> &mut Self {
-        if !root.is_empty() {
-            self.root = Some(root.to_string())
-        }
+    pub fn root(mut self, root: &str) -> Self {
+        self.config.root = if root.is_empty() {
+            None
+        } else {
+            Some(root.to_string())
+        };
 
         self
     }
 
     /// Set endpoint of this backend.
-    pub fn endpoint(&mut self, endpoint: &str) -> &mut Self {
+    pub fn endpoint(mut self, endpoint: &str) -> Self {
         if !endpoint.is_empty() {
             // Trim trailing `/` so that we can accept `http://127.0.0.1:9000/`
-            self.endpoint = Some(endpoint.trim_end_matches('/').to_string());
+            self.config.endpoint = Some(endpoint.trim_end_matches('/').to_string());
         }
 
         self
@@ -95,9 +95,9 @@ impl AzfileBuilder {
     ///
     /// - If account_name is set, we will take user's input first.
     /// - If not, we will try to load it from environment.
-    pub fn account_name(&mut self, account_name: &str) -> &mut Self {
+    pub fn account_name(mut self, account_name: &str) -> Self {
         if !account_name.is_empty() {
-            self.account_name = Some(account_name.to_string());
+            self.config.account_name = Some(account_name.to_string());
         }
 
         self
@@ -107,9 +107,9 @@ impl AzfileBuilder {
     ///
     /// - If account_key is set, we will take user's input first.
     /// - If not, we will try to load it from environment.
-    pub fn account_key(&mut self, account_key: &str) -> &mut Self {
+    pub fn account_key(mut self, account_key: &str) -> Self {
         if !account_key.is_empty() {
-            self.account_key = Some(account_key.to_string());
+            self.config.account_key = Some(account_key.to_string());
         }
 
         self
@@ -119,9 +119,9 @@ impl AzfileBuilder {
     ///
     /// # Notes
     /// You can find more about from: <https://learn.microsoft.com/en-us/rest/api/storageservices/operations-on-shares--file-service>
-    pub fn share_name(&mut self, share_name: &str) -> &mut Self {
+    pub fn share_name(mut self, share_name: &str) -> Self {
         if !share_name.is_empty() {
-            self.share_name = share_name.to_string();
+            self.config.share_name = share_name.to_string();
         }
 
         self
@@ -133,7 +133,7 @@ impl AzfileBuilder {
     ///
     /// This API is part of OpenDAL's Raw API. `HttpClient` could be changed
     /// during minor updates.
-    pub fn http_client(&mut self, client: HttpClient) -> &mut Self {
+    pub fn http_client(mut self, client: HttpClient) -> Self {
         self.http_client = Some(client);
         self
     }
@@ -141,27 +141,15 @@ impl AzfileBuilder {
 
 impl Builder for AzfileBuilder {
     const SCHEME: Scheme = Scheme::Azfile;
-    type Accessor = AzfileBackend;
+    type Config = AzfileConfig;
 
-    fn from_map(map: HashMap<String, String>) -> Self {
-        let mut builder = AzfileBuilder::default();
-
-        map.get("root").map(|v| builder.root(v));
-        map.get("endpoint").map(|v| builder.endpoint(v));
-        map.get("account_name").map(|v| builder.account_name(v));
-        map.get("account_key").map(|v| builder.account_key(v));
-        map.get("share_name").map(|v| builder.share_name(v));
-
-        builder
-    }
-
-    fn build(&mut self) -> Result<Self::Accessor> {
+    fn build(self) -> Result<impl Access> {
         debug!("backend build started: {:?}", &self);
 
-        let root = normalize_root(&self.root.take().unwrap_or_default());
+        let root = normalize_root(&self.config.root.unwrap_or_default());
         debug!("backend use root {}", root);
 
-        let endpoint = match &self.endpoint {
+        let endpoint = match &self.config.endpoint {
             Some(endpoint) => Ok(endpoint.clone()),
             None => Err(Error::new(ErrorKind::ConfigInvalid, "endpoint is empty")
                 .with_operation("Builder::build")
@@ -169,7 +157,7 @@ impl Builder for AzfileBuilder {
         }?;
         debug!("backend use endpoint {}", &endpoint);
 
-        let client = if let Some(client) = self.http_client.take() {
+        let client = if let Some(client) = self.http_client {
             client
         } else {
             HttpClient::new().map_err(|err| {
@@ -179,6 +167,7 @@ impl Builder for AzfileBuilder {
         };
 
         let account_name_option = self
+            .config
             .account_name
             .clone()
             .or_else(|| infer_account_name_from_endpoint(endpoint.as_str()));
@@ -194,24 +183,56 @@ impl Builder for AzfileBuilder {
 
         let config_loader = AzureStorageConfig {
             account_name: Some(account_name),
-            account_key: self.account_key.clone(),
-            sas_token: self.sas_token.clone(),
+            account_key: self.config.account_key.clone(),
+            sas_token: self.config.sas_token.clone(),
             ..Default::default()
         };
 
         let cred_loader = AzureStorageLoader::new(config_loader);
-
         let signer = AzureStorageSigner::new();
-
-        debug!("backend build finished: {:?}", &self);
         Ok(AzfileBackend {
             core: Arc::new(AzfileCore {
+                info: {
+                    let am = AccessorInfo::default();
+                    am.set_scheme(Scheme::Azfile)
+                        .set_root(&root)
+                        .set_native_capability(Capability {
+                            stat: true,
+                            stat_has_cache_control: true,
+                            stat_has_content_length: true,
+                            stat_has_content_type: true,
+                            stat_has_content_encoding: true,
+                            stat_has_content_range: true,
+                            stat_has_etag: true,
+                            stat_has_content_md5: true,
+                            stat_has_last_modified: true,
+                            stat_has_content_disposition: true,
+
+                            read: true,
+
+                            write: true,
+                            create_dir: true,
+                            delete: true,
+                            rename: true,
+
+                            list: true,
+                            list_has_etag: true,
+                            list_has_last_modified: true,
+                            list_has_content_length: true,
+
+                            shared: true,
+
+                            ..Default::default()
+                        });
+
+                    am.into()
+                },
                 root,
                 endpoint,
                 loader: cred_loader,
                 client,
                 signer,
-                share_name: self.share_name.clone(),
+                share_name: self.config.share_name.clone(),
             }),
         })
     }
@@ -244,37 +265,18 @@ pub struct AzfileBackend {
     core: Arc<AzfileCore>,
 }
 
-#[async_trait]
-impl Accessor for AzfileBackend {
-    type Reader = IncomingAsyncBody;
+impl Access for AzfileBackend {
+    type Reader = HttpBody;
     type Writer = AzfileWriters;
     type Lister = oio::PageLister<AzfileLister>;
+    type Deleter = oio::OneShotDeleter<AzfileDeleter>;
     type BlockingReader = ();
     type BlockingWriter = ();
     type BlockingLister = ();
+    type BlockingDeleter = ();
 
-    fn info(&self) -> AccessorInfo {
-        let mut am = AccessorInfo::default();
-        am.set_scheme(Scheme::Azfile)
-            .set_root(&self.core.root)
-            .set_native_capability(Capability {
-                stat: true,
-
-                read: true,
-                read_can_next: true,
-                read_with_range: true,
-
-                write: true,
-                create_dir: true,
-                delete: true,
-                rename: true,
-
-                list: true,
-
-                ..Default::default()
-            });
-
-        am
+    fn info(&self) -> Arc<AccessorInfo> {
+        self.core.info.clone()
     }
 
     async fn create_dir(&self, path: &str, _: OpCreateDir) -> Result<RpCreateDir> {
@@ -283,10 +285,7 @@ impl Accessor for AzfileBackend {
         let status = resp.status();
 
         match status {
-            StatusCode::CREATED => {
-                resp.into_body().consume().await?;
-                Ok(RpCreateDir::default())
-            }
+            StatusCode::CREATED => Ok(RpCreateDir::default()),
             _ => {
                 // we cannot just check status code because 409 Conflict has two meaning:
                 // 1. If a directory by the same name is being deleted when Create Directory is called, the server returns status code 409 (Conflict)
@@ -302,7 +301,7 @@ impl Accessor for AzfileBackend {
                 {
                     Ok(RpCreateDir::default())
                 } else {
-                    Err(parse_error(resp).await?)
+                    Err(parse_error(resp))
                 }
             }
         }
@@ -321,7 +320,7 @@ impl Accessor for AzfileBackend {
                 let meta = parse_into_metadata(path, resp.headers())?;
                 Ok(RpStat::new(meta))
             }
-            _ => Err(parse_error(resp).await?),
+            _ => Err(parse_error(resp)),
         }
     }
 
@@ -329,21 +328,13 @@ impl Accessor for AzfileBackend {
         let resp = self.core.azfile_read(path, args.range()).await?;
 
         let status = resp.status();
-
         match status {
-            StatusCode::OK | StatusCode::PARTIAL_CONTENT => {
-                let size = parse_content_length(resp.headers())?;
-                let range = parse_content_range(resp.headers())?;
-                Ok((
-                    RpRead::new().with_size(size).with_range(range),
-                    resp.into_body(),
-                ))
+            StatusCode::OK | StatusCode::PARTIAL_CONTENT => Ok((RpRead::new(), resp.into_body())),
+            _ => {
+                let (part, mut body) = resp.into_parts();
+                let buf = body.to_buffer().await?;
+                Err(parse_error(Response::from_parts(part, buf)))
             }
-            StatusCode::RANGE_NOT_SATISFIABLE => {
-                resp.into_body().consume().await?;
-                Ok((RpRead::new().with_size(Some(0)), IncomingAsyncBody::empty()))
-            }
-            _ => Err(parse_error(resp).await?),
         }
     }
 
@@ -351,28 +342,18 @@ impl Accessor for AzfileBackend {
         self.core.ensure_parent_dir_exists(path).await?;
         let w = AzfileWriter::new(self.core.clone(), args.clone(), path.to_string());
         let w = if args.append() {
-            AzfileWriters::Two(oio::AppendObjectWriter::new(w))
+            AzfileWriters::Two(oio::AppendWriter::new(w))
         } else {
             AzfileWriters::One(oio::OneShotWriter::new(w))
         };
-        return Ok((RpWrite::default(), w));
+        Ok((RpWrite::default(), w))
     }
 
-    async fn delete(&self, path: &str, _: OpDelete) -> Result<RpDelete> {
-        let resp = if path.ends_with('/') {
-            self.core.azfile_delete_dir(path).await?
-        } else {
-            self.core.azfile_delete_file(path).await?
-        };
-
-        let status = resp.status();
-        match status {
-            StatusCode::ACCEPTED | StatusCode::NOT_FOUND => {
-                resp.into_body().consume().await?;
-                Ok(RpDelete::default())
-            }
-            _ => Err(parse_error(resp).await?),
-        }
+    async fn delete(&self) -> Result<(RpDelete, Self::Deleter)> {
+        Ok((
+            RpDelete::default(),
+            oio::OneShotDeleter::new(AzfileDeleter::new(self.core.clone())),
+        ))
     }
 
     async fn list(&self, path: &str, args: OpList) -> Result<(RpList, Self::Lister)> {
@@ -386,11 +367,8 @@ impl Accessor for AzfileBackend {
         let resp = self.core.azfile_rename(from, to).await?;
         let status = resp.status();
         match status {
-            StatusCode::OK => {
-                resp.into_body().consume().await?;
-                Ok(RpRename::default())
-            }
-            _ => Err(parse_error(resp).await?),
+            StatusCode::OK => Ok(RpRename::default()),
+            _ => Err(parse_error(resp)),
         }
     }
 }
@@ -398,7 +376,6 @@ impl Accessor for AzfileBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Builder;
 
     #[test]
     fn test_infer_storage_name_from_endpoint() {
@@ -418,25 +395,5 @@ mod tests {
             let account_name = infer_account_name_from_endpoint(endpoint);
             assert_eq!(account_name, Some(expected.to_string()), "{}", desc);
         }
-    }
-
-    #[test]
-    fn test_builder_from_endpoint_and_key_infer_account_name() {
-        let mut azfile_builder = AzfileBuilder::default();
-        azfile_builder.endpoint("https://account.file.core.windows.net/");
-        azfile_builder.account_key("account-key");
-        let azfile = azfile_builder
-            .build()
-            .expect("build Azdls should be succeeded.");
-
-        assert_eq!(
-            azfile.core.endpoint,
-            "https://account.file.core.windows.net"
-        );
-
-        assert_eq!(
-            azfile_builder.account_key.unwrap(),
-            "account-key".to_string()
-        );
     }
 }

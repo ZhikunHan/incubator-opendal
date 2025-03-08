@@ -50,7 +50,11 @@ pub async fn test_copy_file_with_ascii_name(op: Operator) -> Result<()> {
 
     op.copy(&source_path, &target_path).await?;
 
-    let target_content = op.read(&target_path).await.expect("read must succeed");
+    let target_content = op
+        .read(&target_path)
+        .await
+        .expect("read must succeed")
+        .to_bytes();
     assert_eq!(
         format!("{:x}", Sha256::digest(target_content)),
         format!("{:x}", Sha256::digest(&source_content)),
@@ -63,6 +67,11 @@ pub async fn test_copy_file_with_ascii_name(op: Operator) -> Result<()> {
 
 /// Copy a file with non ascii name and test contents.
 pub async fn test_copy_file_with_non_ascii_name(op: Operator) -> Result<()> {
+    // Koofr does not support non-ascii name.(https://github.com/apache/opendal/issues/4051)
+    if op.info().scheme() == Scheme::Koofr {
+        return Ok(());
+    }
+
     let source_path = "🐂🍺中文.docx";
     let target_path = "😈🐅Français.docx";
     let (source_content, _) = gen_bytes(op.info().full_capability());
@@ -70,7 +79,11 @@ pub async fn test_copy_file_with_non_ascii_name(op: Operator) -> Result<()> {
     op.write(source_path, source_content.clone()).await?;
     op.copy(source_path, target_path).await?;
 
-    let target_content = op.read(target_path).await.expect("read must succeed");
+    let target_content = op
+        .read(target_path)
+        .await
+        .expect("read must succeed")
+        .to_bytes();
     assert_eq!(
         format!("{:x}", Sha256::digest(target_content)),
         format!("{:x}", Sha256::digest(&source_content)),
@@ -172,7 +185,11 @@ pub async fn test_copy_nested(op: Operator) -> Result<()> {
 
     op.copy(&source_path, &target_path).await?;
 
-    let target_content = op.read(&target_path).await.expect("read must succeed");
+    let target_content = op
+        .read(&target_path)
+        .await
+        .expect("read must succeed")
+        .to_bytes();
     assert_eq!(
         format!("{:x}", Sha256::digest(target_content)),
         format!("{:x}", Sha256::digest(&source_content)),
@@ -198,7 +215,11 @@ pub async fn test_copy_overwrite(op: Operator) -> Result<()> {
 
     op.copy(&source_path, &target_path).await?;
 
-    let target_content = op.read(&target_path).await.expect("read must succeed");
+    let target_content = op
+        .read(&target_path)
+        .await
+        .expect("read must succeed")
+        .to_bytes();
     assert_eq!(
         format!("{:x}", Sha256::digest(target_content)),
         format!("{:x}", Sha256::digest(&source_content)),

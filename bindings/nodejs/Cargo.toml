@@ -19,16 +19,14 @@
 name = "opendal-nodejs"
 publish = false
 
-authors.workspace = true
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-repository.workspace = true
-rust-version.workspace = true
-version.workspace = true
+authors = ["Apache OpenDAL <dev@opendal.apache.org>"]
+edition = "2021"
+homepage = "https://opendal.apache.org/"
+license = "Apache-2.0"
+repository = "https://github.com/apache/opendal"
+rust-version = "1.75"
 
 [features]
-# Enable all opendal default feature by default.
 default = [
   "services-azblob",
   "services-azdls",
@@ -48,16 +46,18 @@ default = [
 
 services-all = [
   "default",
-
+  "services-aliyun-drive",
+  "services-alluxio",
   "services-azfile",
   "services-cacache",
+  "services-chainsafe",
   "services-dashmap",
   "services-dropbox",
-  "services-etcd",
+  # FIXME this service need protoc
+  # "services-etcd",
   # FIXME this requires a preinstalled fdb library
   # "services-foundationdb",
-  # FIXME waiting for this issue close https://github.com/async-rs/async-tls/issues/55
-  #  "services-ftp",
+  # "services-ftp",
   "services-gdrive",
   # FIXME how to support HDFS services in bindings?
   # "services-hdfs",
@@ -72,26 +72,29 @@ services-all = [
   "services-mysql",
   "services-redb",
   "services-redis",
-  "services-rocksdb",
+  # FIXME how to support rocksdb services in bindings?
+  # "services-rocksdb",
   "services-sled",
-  "services-supabase",
   "services-swift",
-  "services-tikv",
+  # FIXME this service need protoc
+  # "services-tikv",
   "services-vercel-artifacts",
-  "services-wasabi",
   "services-mongodb",
   "services-gridfs",
   "services-sqlite",
-  "services-libsql",
   "services-alluxio",
   "services-b2",
   "services-seafile",
   "services-upyun",
+  "services-koofr",
+  "services-yandex-disk",
 ]
 
 # Default services provided by opendal.
+services-aliyun-drive = ["opendal/services-aliyun-drive"]
 services-azblob = ["opendal/services-azblob"]
 services-azdls = ["opendal/services-azdls"]
+services-chainsafe = ["opendal/services-chainsafe"]
 services-cos = ["opendal/services-cos"]
 services-fs = ["opendal/services-fs"]
 services-gcs = ["opendal/services-gcs"]
@@ -120,11 +123,12 @@ services-gridfs = ["opendal/services-gridfs"]
 services-hdfs = ["opendal/services-hdfs"]
 services-huggingface = ["opendal/services-huggingface"]
 services-ipfs = ["opendal/services-ipfs"]
-services-libsql = ["opendal/services-libsql"]
+services-koofr = ["opendal/services-koofr"]
 services-memcached = ["opendal/services-memcached"]
 services-mini-moka = ["opendal/services-mini-moka"]
 services-moka = ["opendal/services-moka"]
 services-mongodb = ["opendal/services-mongodb"]
+services-monoiofs = ["opendal/services-monoiofs"]
 services-mysql = ["opendal/services-mysql"]
 services-onedrive = ["opendal/services-onedrive"]
 services-persy = ["opendal/services-persy"]
@@ -136,12 +140,11 @@ services-seafile = ["opendal/services-seafile"]
 services-sftp = ["opendal/services-sftp"]
 services-sled = ["opendal/services-sled"]
 services-sqlite = ["opendal/services-sqlite"]
-services-supabase = ["opendal/services-supabase"]
 services-swift = ["opendal/services-swift"]
 services-tikv = ["opendal/services-tikv"]
 services-upyun = ["opendal/services-upyun"]
 services-vercel-artifacts = ["opendal/services-vercel-artifacts"]
-services-wasabi = ["opendal/services-wasabi"]
+services-yandex-disk = ["opendal/services-yandex-disk"]
 
 [lib]
 crate-type = ["cdylib"]
@@ -154,7 +157,10 @@ napi = { version = "2.11.3", default-features = false, features = [
   "async",
 ] }
 napi-derive = "2.14.6"
-opendal.workspace = true
+# this crate won't be published, we always use the local version
+opendal = { version = ">=0", path = "../../core", features = [
+  "layers-blocking",
+] }
 tokio = "1"
 
 [build-dependencies]
